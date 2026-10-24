@@ -1,0 +1,2413 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Deutsch Zukunft - IT Logistics Daily Task & DB Tracker</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Google Fonts Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <!-- Confetti Canvas -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <!-- FIREBASE SCRIPTS (MODULAR SDK) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Global Firebase configuration
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'deutsch-zukunft-app';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+      apiKey: "demo-key",
+      authDomain: "demo.firebaseapp.com",
+      projectId: "demo-project",
+      storageBucket: "demo.appspot.com",
+      messagingSenderId: "123456789",
+      appId: "1:123456789:web:abcdef"
+    };
+
+    let app, auth, db;
+    let currentUser = null;
+    let currentUnsubscribe = null;
+
+    try {
+      app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      db = getFirestore(app);
+    } catch (e) {
+      console.warn("Firebase Init fallback:", e);
+    }
+
+    // Expose cloud sync interface to window
+    window.CloudDB = {
+      isReady: false,
+      userId: null,
+
+      async init() {
+        if (!auth) {
+          window.updateCloudStatus('offline', 'Chế Độ Cục Bộ (Offline)');
+          return;
+        }
+
+        try {
+          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await signInWithCustomToken(auth, __initial_auth_token);
+          } else {
+            await signInAnonymously(auth);
+          }
+          
+          currentUser = auth.currentUser;
+          this.userId = currentUser ? currentUser.uid : crypto.randomUUID();
+          this.isReady = true;
+
+          const uidDisplay = document.getElementById('cloud-user-id-text');
+          if (uidDisplay) {
+            uidDisplay.textContent = this.userId;
+          }
+          window.updateCloudStatus('online', 'Đám Mây Đã Kết Nối');
+        } catch (err) {
+          console.warn("Cloud Auth error, fallback offline:", err);
+          window.updateCloudStatus('fallback', 'Lưu Trữ Cục Bộ');
+        }
+      },
+
+      // Subscribe to real-time changes of a specific date document
+      subscribeDay(dateStr, onDataReceived) {
+        if (!this.isReady || !currentUser || !db) return;
+
+        if (currentUnsubscribe) {
+          currentUnsubscribe();
+          currentUnsubscribe = null;
+        }
+
+        // Rule 1: /artifacts/{appId}/users/{userId}/{collectionName}/{docId}
+        const docRef = doc(db, 'artifacts', appId, 'users', this.userId, 'daily_tasks', dateStr);
+
+        currentUnsubscribe = onSnapshot(docRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            onDataReceived(data);
+          } else {
+            onDataReceived(null);
+          }
+        }, (error) => {
+          console.warn("Firestore snapshot error:", error);
+          window.updateCloudStatus('fallback', 'Lỗi Kết Nối Đám Mây');
+        });
+      },
+
+      // Save or update day in Cloud Firestore
+      async saveDay(dayData) {
+        if (!this.isReady || !currentUser || !db) return false;
+        try {
+          const docRef = doc(db, 'artifacts', appId, 'users', this.userId, 'daily_tasks', dayData.date);
+          dayData.updatedAt = Date.now();
+          await setDoc(docRef, dayData, { merge: true });
+          return true;
+        } catch (err) {
+          console.warn("Cloud Save error:", err);
+          return false;
+        }
+      },
+
+      // Fetch all days for streak and history without complex queries (Rule 2)
+      async getAllDays() {
+        if (!this.isReady || !currentUser || !db) return [];
+        try {
+          const colRef = collection(db, 'artifacts', appId, 'users', this.userId, 'daily_tasks');
+          const snapshot = await getDocs(colRef);
+          const list = [];
+          snapshot.forEach((d) => {
+            list.push(d.data());
+          });
+          return list;
+        } catch (err) {
+          console.warn("Cloud getAllDays error:", err);
+          return [];
+        }
+      }
+    };
+  </script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f7ff',
+              100: '#e0effe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              800: '#1e40af',
+              900: '#1e3a8a',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.4); border-radius: 9999px; }
+    
+    /* Animation */
+    .fade-in { animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-3px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .checkbox-bounce:active { transform: scale(0.9); }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-full flex flex-col font-sans transition-colors duration-200 antialiased selection:bg-brand-600 selection:text-white pb-12">
+
+  <!-- TOP HEADER -->
+  <header class="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 shadow-xs">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      
+      <!-- Logo & Branding -->
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-950 via-rose-700 to-amber-400 p-[2px] shadow-sm flex-shrink-0">
+          <div class="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center text-white font-bold text-xs tracking-wider">
+            DE
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 class="text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-white leading-none">
+              Deutsch Zukunft
+            </h1>
+            <span id="cloud-badge" class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center space-x-1">
+              <span id="cloud-status-dot" class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span id="db-status-label">Đang Kết Nối Đám Mây...</span>
+            </span>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 hidden sm:block">
+            Sáng: Khóa Tiếng Đức (8h-13h30) • Chiều: BTVN & IT Logistics (14h-17h) • Tối: Đi làm
+          </p>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="flex items-center space-x-2">
+        <!-- Gemini AI Dynamic Coach Button -->
+        <button id="open-gemini-btn" class="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 hover:from-violet-500 hover:to-blue-500 text-white shadow-sm transition active:scale-95" title="Liên kết Gemini AI để tự động cập nhật & điều chỉnh bài tập hôm nay">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+          <span>AI Cập Nhật Lịch</span>
+        </button>
+
+        <!-- IT Logistics Vocab & Flashcard Button -->
+        <button id="open-vocab-btn" class="inline-flex items-center space-x-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/70 dark:text-amber-300 dark:hover:bg-amber-900/80 border border-amber-200 dark:border-amber-800/60 transition shadow-xs" title="Sổ tay từ vựng IT Logistics & Phát âm tiếng Đức">
+          <i data-lucide="languages" class="w-3.5 h-3.5"></i>
+          <span class="hidden sm:inline">Từ Vựng IT</span>
+        </button>
+
+        <!-- Cloud Account Details Button -->
+        <button id="open-account-btn" class="inline-flex items-center space-x-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-xl bg-sky-50 text-sky-700 hover:bg-sky-100 dark:bg-sky-950/70 dark:text-sky-300 dark:hover:bg-sky-900/80 border border-sky-200 dark:border-sky-800/60 transition shadow-xs" title="Tài khoản đồng bộ đám mây">
+          <i data-lucide="cloud" class="w-3.5 h-3.5"></i>
+          <span class="hidden sm:inline">Đám Mây</span>
+        </button>
+
+        <!-- History / Streak Log Button -->
+        <button id="open-history-btn" class="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition" title="Lịch sử dữ liệu học tập">
+          <i data-lucide="database" class="w-3.5 h-3.5 text-brand-600"></i>
+          <span class="hidden sm:inline">Lịch Sử CSDL</span>
+        </button>
+
+        <!-- Roadmap Button -->
+        <button id="open-roadmap-btn" class="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/70 dark:text-indigo-300 dark:hover:bg-indigo-900/80 border border-indigo-200 dark:border-indigo-800/60 transition shadow-xs" title="Tra cứu 4 giai đoạn lộ trình">
+          <i data-lucide="map" class="w-3.5 h-3.5"></i>
+          <span class="hidden sm:inline">Lộ Trình</span>
+        </button>
+
+        <!-- Pomodoro Trigger -->
+        <button id="open-timer-btn" class="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/70 dark:text-emerald-300 dark:hover:bg-emerald-900/80 border border-emerald-200 dark:border-emerald-800/60 transition shadow-xs">
+          <i data-lucide="timer" class="w-3.5 h-3.5"></i>
+          <span id="timer-quick-status" class="hidden sm:inline">Đồng Hồ 14-17h</span>
+        </button>
+
+        <!-- Theme Toggle -->
+        <button id="theme-toggle-btn" class="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition" aria-label="Toggle theme">
+          <i data-lucide="moon" id="theme-icon-dark" class="w-4 h-4 hidden"></i>
+          <i data-lucide="sun" id="theme-icon-light" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+    <!-- DATE NAVIGATION & STREAK STRIP -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      
+      <!-- Date Picker Navigation -->
+      <div class="flex items-center space-x-2">
+        <button id="prev-day-btn" class="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition" title="Xem ngày trước">
+          <i data-lucide="chevron-left" class="w-4 h-4"></i>
+        </button>
+
+        <div class="flex items-center space-x-2 bg-slate-100 dark:bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700/80">
+          <i data-lucide="calendar" class="w-4 h-4 text-brand-600 dark:text-brand-400"></i>
+          <input type="date" id="active-date-input" class="bg-transparent text-xs sm:text-sm font-semibold text-slate-900 dark:text-white focus:outline-none cursor-pointer">
+        </div>
+
+        <button id="next-day-btn" class="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition" title="Xem ngày tiếp theo">
+          <i data-lucide="chevron-right" class="w-4 h-4"></i>
+        </button>
+
+        <button id="today-btn" class="px-2.5 py-1.5 text-xs font-semibold rounded-xl bg-brand-50 text-brand-700 hover:bg-brand-100 dark:bg-brand-950/60 dark:text-brand-300 border border-brand-200 dark:border-brand-800 transition">
+          Hôm nay
+        </button>
+      </div>
+
+      <!-- Streak & Stats Counter -->
+      <div class="flex items-center space-x-4 self-end sm:self-auto">
+        <div class="flex items-center space-x-2 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/40 px-3.5 py-1.5 rounded-xl border border-amber-200 dark:border-amber-800/60">
+          <div class="p-1 rounded-lg bg-amber-500 text-white">
+            <i data-lucide="flame" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <div class="text-[10px] uppercase font-bold text-amber-700 dark:text-amber-400 tracking-wide">Chuỗi Kỷ Luật</div>
+            <div class="text-xs sm:text-sm font-black text-slate-900 dark:text-white leading-none">
+              <span id="streak-counter">0</span> Ngày Liên Tục
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DAILY PROGRESS CARD -->
+    <section class="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-xs transition">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center space-x-2">
+            <span id="display-date-title" class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              Đang tải dữ liệu...
+            </span>
+            <span id="schedule-type-badge" class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+              Lịch Ngày Thường (T2-T6)
+            </span>
+            <span class="w-1.5 h-1.5 rounded-full bg-slate-300 dark:text-slate-700"></span>
+            <span id="db-saved-badge" class="text-[11px] font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-900 flex items-center space-x-1">
+              <i data-lucide="cloud-check" id="sync-icon" class="w-3.5 h-3.5"></i>
+              <span id="cloud-sync-state-text">Tự Động Lưu Tức Thì</span>
+            </span>
+          </div>
+
+          <div class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-1.5 flex items-baseline gap-2.5">
+            Tiến độ hoàn thành:
+            <span id="progress-percent" class="text-brand-600 dark:text-brand-400 font-mono">0%</span>
+          </div>
+
+          <p id="progress-subtext" class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Đã hoàn thành <span id="done-count" class="font-bold text-slate-800 dark:text-slate-200">0</span> / <span id="total-count" class="font-bold text-slate-800 dark:text-slate-200">0</span> mục trong ngày.
+          </p>
+        </div>
+
+        <!-- Batch Action Buttons -->
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- EXPLICIT SAVE BUTTON -->
+          <button id="manual-save-btn" class="inline-flex items-center space-x-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition active:scale-95" title="Chốt tiến độ học tập và lưu ngay vào Database">
+            <i data-lucide="save" class="w-4 h-4"></i>
+            <span>Lưu & Chốt Ngày</span>
+          </button>
+
+          <button id="add-task-trigger-btn" class="inline-flex items-center space-x-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-slate-900 text-white hover:bg-slate-800 dark:bg-brand-600 dark:hover:bg-brand-500 shadow-sm transition active:scale-95">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+            <span>Thêm Nhiệm Vụ</span>
+          </button>
+          
+          <button id="check-all-btn" class="inline-flex items-center space-x-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 dark:bg-slate-800 dark:hover:bg-emerald-950/60 dark:text-slate-300 dark:hover:text-emerald-300 border border-slate-200 dark:border-slate-700 transition">
+            <i data-lucide="check-check" class="w-4 h-4 text-emerald-600"></i>
+            <span>Tích Hết</span>
+          </button>
+
+          <button id="uncheck-all-btn" class="inline-flex items-center space-x-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition">
+            <i data-lucide="square" class="w-3.5 h-3.5"></i>
+            <span>Bỏ Tích Hết</span>
+          </button>
+
+          <button id="reset-day-btn" class="inline-flex items-center space-x-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-600 dark:bg-slate-800 dark:hover:bg-rose-950/60 dark:text-slate-300 dark:hover:text-rose-300 border border-slate-200 dark:border-slate-700 transition" title="Đặt lại về mặc định của ngày này">
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+            <span>Khôi Phục Mặc Định</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Schedule Template Switcher (Weekday / Saturday / Sunday) -->
+      <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
+        <span class="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center space-x-1.5">
+          <i data-lucide="calendar-clock" class="w-3.5 h-3.5 text-brand-500"></i>
+          <span>Chế độ lịch của ngày đang chọn (Tự động theo Thứ hoặc bấm để chuyển nhanh):</span>
+        </span>
+        <div class="flex items-center space-x-1.5">
+          <button onclick="applyScheduleTemplate('weekday')" id="tpl-btn-weekday" class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-brand-500 transition">
+            Thứ 2 – Thứ 6 (Học Trên Lớp)
+          </button>
+          <button onclick="applyScheduleTemplate('saturday')" id="tpl-btn-saturday" class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-amber-500 transition">
+            Thứ Bảy (Luyện Đề & Hồ Sơ)
+          </button>
+          <button onclick="applyScheduleTemplate('sunday')" id="tpl-btn-sunday" class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-emerald-500 transition">
+            Chủ Nhật (Hồi Sức & Ôn Tuần)
+          </button>
+        </div>
+      </div>
+
+      <!-- Dynamic Progress Bar -->
+      <div class="w-full bg-slate-100 dark:bg-slate-800 h-3 rounded-full mt-4 overflow-hidden p-0.5 border border-slate-200/60 dark:border-slate-700/60">
+        <div id="progress-bar-fill" class="bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-500 h-full rounded-full transition-all duration-300 ease-out" style="width: 0%;"></div>
+      </div>
+    </section>
+
+    <!-- FLOATING POMODORO BANNER (WHEN ACTIVE) -->
+    <div id="timer-active-card" class="hidden bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 border border-emerald-500/40 text-emerald-100 rounded-2xl p-4 shadow-md flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="p-2.5 rounded-xl bg-emerald-800/60 text-emerald-300 animate-pulse">
+          <i data-lucide="flame" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="text-[11px] uppercase font-bold text-emerald-400 tracking-wider">Phiên tự học 14h - 17h đang chạy</div>
+          <div id="timer-display-banner" class="text-2xl font-mono font-bold text-white tracking-tight">25:00</div>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2">
+        <button id="timer-banner-pause" class="p-2 bg-emerald-800 hover:bg-emerald-700 rounded-xl text-white transition">
+          <i data-lucide="pause" class="w-4 h-4"></i>
+        </button>
+        <button id="timer-banner-stop" class="p-2 bg-rose-800 hover:bg-rose-700 rounded-xl text-white transition">
+          <i data-lucide="square" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION CONTAINER -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+    <!-- TIME BLOCKS WRAPPER (DYNAMICALLY RENDERED FROM DB) -->
+    <div class="space-y-5" id="blocks-container">
+      <!-- Injected from Database -->
+    </div>
+
+    <!-- DAILY HOMEWORK & CLASS SCRATCHPAD (GHI CHÚ NHANH BTVN TRÊN LỚP) -->
+    <section class="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div class="flex items-center space-x-2.5">
+          <div class="p-2 rounded-xl bg-brand-50 dark:bg-brand-950 text-brand-600 dark:text-brand-400">
+            <i data-lucide="notebook-pen" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-sm sm:text-base text-slate-900 dark:text-white">Ghi Chú Nhanh Trên Lớp & Chi Tiết BTVN</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Ghi lại bài học sáng nay hoặc lỗi sai -> Bấm nút <b>"AI Phân Tích & Tạo Việc"</b> để Gemini tự chia vào lịch chiều</p>
+          </div>
+        </div>
+        <div class="flex items-center space-x-2">
+          <span id="note-save-indicator" class="text-[11px] font-medium text-slate-400 dark:text-slate-500">Tự động lưu</span>
+          <button id="quick-ai-adapt-btn" class="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-violet-100 hover:bg-violet-200 text-violet-800 dark:bg-violet-950/90 dark:hover:bg-violet-900 dark:text-violet-300 border border-violet-300 dark:border-violet-800 transition">
+            <i data-lucide="wand-sparkles" class="w-3.5 h-3.5"></i>
+            <span>AI Phân Tích & Tạo Việc Chiều Nay</span>
+          </button>
+        </div>
+      </div>
+      <textarea id="daily-scratchpad" rows="3" placeholder="VD: Sáng nay học bài 8 (Mệnh đề quan hệ Relativsätze). BTVN: Arbeitsbuch trang 42 bài 3a, 3b và viết email xin đổi lịch phỏng vấn (60 từ). Phần nghe số thứ tự còn hơi chậm..." class="w-full text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-slate-800/60 text-slate-800 dark:text-slate-100 p-3.5 focus:ring-2 focus:ring-brand-500 focus:outline-none transition resize-y"></textarea>
+    </section>
+
+    <!-- 17:00 EVENING SHIFT BANNER -->
+    <div class="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-5 border border-slate-700/80 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div class="flex items-start sm:items-center space-x-4">
+        <div class="p-3 bg-amber-500/20 rounded-xl text-amber-400 flex-shrink-0">
+          <i data-lucide="briefcase" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h3 class="font-bold text-sm sm:text-base text-amber-300">17:00 Trở đi: Ca đi làm buổi tối</h3>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 font-semibold uppercase">Đầu óc thanh thản</span>
+          </div>
+          <p class="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed">
+            Đúng 17:00 đóng toàn bộ sách vở, chốt tiến độ và lên đường đi làm. Không mang tâm lý nợ bài tập!
+          </p>
+        </div>
+      </div>
+
+      <button id="bottom-save-btn" class="w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs tracking-wide transition shadow-sm flex-shrink-0 active:scale-95">
+        <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+        <span>Chốt Ngày Đi Làm (17:00)</span>
+      </button>
+    </div>
+  </main>
+
+  <!-- ADD TASK MODAL -->
+  <div id="add-task-modal" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs hidden flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+        <h3 class="font-bold text-slate-900 dark:text-white flex items-center space-x-2 text-base">
+          <i data-lucide="plus-circle" class="w-4 h-4 text-brand-600"></i>
+          <span>Thêm việc mới vào CSDL ngày</span>
+        </h3>
+        <button id="close-add-modal-btn" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Thuộc khung giờ / Block</label>
+          <select id="new-task-block" class="w-full text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 px-3 py-2.5 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+            <option value="morning">Sáng (08:00 - 13:30): Lớp Tiếng Đức</option>
+            <option value="afternoon_b1" selected>Chiều Block 1 (14:00 - 15:15): BTVN Tiếng Đức</option>
+            <option value="afternoon_b2">Chiều Block 2 (15:30 - 16:30): Luyện Đề Hören/Sprechen</option>
+            <option value="afternoon_b3">Chiều Block 3 (16:30 - 17:00): IT Logistics & Hồ Sơ</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Nội dung nhiệm vụ / Bài tập</label>
+          <input type="text" id="new-task-title" placeholder="VD: Làm bài tập Arbeitsbuch trang 45..." class="w-full text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 px-3 py-2.5 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Thẻ phân loại (Tag)</label>
+          <input type="text" id="new-task-tag" placeholder="VD: Grammatik, BTVN, Schreiben..." class="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <button id="cancel-add-task-btn" class="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition">
+          Hủy
+        </button>
+        <button id="save-task-btn" class="px-4 py-2 text-xs font-semibold bg-brand-600 hover:bg-brand-500 text-white rounded-xl shadow-xs transition">
+          Lưu Vào Database
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTORY & DATABASE RECORDS MODAL -->
+  <div id="history-modal" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs hidden flex items-center justify-center p-3 sm:p-5">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
+      <!-- Modal Header -->
+      <div class="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div class="flex items-center space-x-2.5">
+          <div class="p-2 rounded-xl bg-brand-50 dark:bg-brand-950 text-brand-600 dark:text-brand-400">
+            <i data-lucide="database" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-base sm:text-lg text-slate-900 dark:text-white">Lịch Sử Cơ Sở Dữ Liệu Ngày Học</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Xem lại dữ liệu đã lưu trữ và chuyển nhanh sang ngày cũ</p>
+          </div>
+        </div>
+        <button id="close-history-btn" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- History List -->
+      <div class="p-4 sm:p-5 overflow-y-auto space-y-3" id="history-records-list">
+        <!-- Records injected dynamically -->
+      </div>
+
+      <div class="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center space-x-3">
+          <button id="export-json-btn" class="text-xs text-brand-600 hover:text-brand-700 dark:text-brand-400 font-semibold flex items-center space-x-1 bg-brand-50 dark:bg-brand-950/60 px-2.5 py-1.5 rounded-lg border border-brand-200 dark:border-brand-800 transition">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            <span>Xuất File Backup (.json)</span>
+          </button>
+          <label class="text-xs text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-semibold flex items-center space-x-1 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 transition cursor-pointer">
+            <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+            <span>Khôi Phục Từ File</span>
+            <input type="file" id="import-json-input" accept=".json" class="hidden">
+          </label>
+          <button id="clear-all-db-btn" class="text-xs text-rose-600 hover:text-rose-700 font-semibold flex items-center space-x-1 px-2 py-1.5">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            <span>Xóa CSDL</span>
+          </button>
+        </div>
+        <button id="close-history-bottom" class="px-4 py-2 text-xs font-semibold bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl text-slate-700 dark:text-slate-300 transition">
+          Đóng
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- IT LOGISTICS VOCABULARY & TTS PRONUNCIATION MODAL -->
+  <div id="vocab-modal" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs hidden flex items-center justify-center p-3 sm:p-5">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
+      <div class="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div class="flex items-center space-x-2.5">
+          <div class="p-2 rounded-xl bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400">
+            <i data-lucide="languages" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-base sm:text-lg text-slate-900 dark:text-white">Kho Thuật Ngữ IT Logistics & Phát Âm Chuẩn Đức</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Bấm biểu tượng loa để nghe phát âm tiếng Đức • Phục vụ phỏng vấn & đọc tài liệu</p>
+          </div>
+        </div>
+        <button id="close-vocab-btn" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Add New Term Form -->
+      <div class="p-3 sm:p-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row gap-2">
+        <input type="text" id="vocab-de-input" placeholder="Từ tiếng Đức (VD: die Datenbank)..." class="flex-1 text-xs sm:text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:outline-none">
+        <input type="text" id="vocab-vi-input" placeholder="Nghĩa tiếng Việt & Ví dụ..." class="flex-1 text-xs sm:text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:outline-none">
+        <button id="add-vocab-btn" class="px-4 py-2 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl transition flex items-center justify-center space-x-1 flex-shrink-0">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>Lưu Từ</span>
+        </button>
+      </div>
+
+      <!-- Vocab List -->
+      <div class="p-4 sm:p-5 overflow-y-auto space-y-2.5" id="vocab-list-container">
+        <!-- Dynamically populated -->
+      </div>
+
+      <div class="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex justify-end">
+        <button id="close-vocab-bottom" class="px-4 py-2 text-xs font-semibold bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl text-slate-700 dark:text-slate-300 transition">
+          Đóng
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLOUD SYNC & ACCOUNT MODAL -->
+  <div id="account-modal" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs hidden flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+        <h3 class="font-bold text-slate-900 dark:text-white flex items-center space-x-2 text-base">
+          <i data-lucide="cloud" class="w-5 h-5 text-sky-600"></i>
+          <span>Đồng Bộ Đám Mây Đa Thiết Bị</span>
+        </h3>
+        <button id="close-account-modal" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+        <p>
+          Hệ thống lưu trữ đám mây tự động cập nhật mọi bài tập, checklist và ghi chú tiến độ giữa điện thoại và máy tính của bạn theo thời gian thực.
+        </p>
+
+        <div class="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 space-y-1.5">
+          <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">Mã Người Dùng Đám Mây (User ID):</div>
+          <div id="cloud-user-id-text" class="font-mono text-xs text-slate-800 dark:text-slate-100 break-all select-all font-semibold bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800">
+            Đang tải mã người dùng...
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-2 text-emerald-600 dark:text-emerald-400 font-semibold text-xs">
+          <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+          <span>Trạng thái: Hoạt động tự động, không lo mất dữ liệu</span>
+        </div>
+      </div>
+
+      <div class="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-800">
+        <button id="close-account-btn-bottom" class="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl text-slate-700 dark:text-slate-200 transition">
+          Đã Hiểu
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROADMAP MODAL -->
+  <div id="roadmap-modal" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs hidden flex items-center justify-center p-3 sm:p-5">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
+      <!-- Modal Header -->
+      <div class="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div class="flex items-center space-x-2.5">
+          <div class="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400">
+            <i data-lucide="milestone" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-base sm:text-lg text-slate-900 dark:text-white">Chiến Lược IT Logistics Deutsch Zukunft</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Lộ trình 4 giai đoạn chuẩn bị và cất cánh sang Đức</p>
+          </div>
+        </div>
+        <button id="close-roadmap-btn" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Roadmap Tabs -->
+      <div class="p-4 sm:p-5 overflow-y-auto space-y-4">
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+          <button class="roadmap-tab-btn active px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs transition" data-phase="milestones">
+            ✅ Hồ Sơ Gốc
+          </button>
+          <button class="roadmap-tab-btn px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition" data-phase="1">
+            GĐ 1: A2 & B1
+          </button>
+          <button class="roadmap-tab-btn px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition" data-phase="2">
+            GĐ 2: Đỗ B1 & Apply
+          </button>
+          <button class="roadmap-tab-btn px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition" data-phase="3">
+            GĐ 3: Visa & B2
+          </button>
+          <button class="roadmap-tab-btn px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition" data-phase="4">
+            GĐ 4: Bay & Làm việc
+          </button>
+        </div>
+
+        <div id="roadmap-phase-content" class="text-xs sm:text-sm space-y-3 text-slate-700 dark:text-slate-300">
+          <!-- Dynamic Content based on tab -->
+        </div>
+      </div>
+
+      <div class="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex justify-end">
+        <button id="close-roadmap-bottom" class="px-4 py-2 text-xs font-semibold bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl text-slate-700 dark:text-slate-300 transition">
+          Đóng
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- POMODORO TIMER MODAL -->
+  <div id="timer-modal" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs hidden flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl max-w-sm w-full p-6 border border-slate-200 dark:border-slate-800 shadow-2xl text-center space-y-5">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold tracking-wider uppercase text-emerald-600 dark:text-emerald-400 flex items-center space-x-1">
+          <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+          <span>Buổi Chiều Tập Trung 14h-17h</span>
+        </span>
+        <button id="close-timer-modal" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Presets -->
+      <div class="grid grid-cols-3 gap-2">
+        <button class="timer-preset-btn px-2 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 hover:border-emerald-500 text-slate-700 dark:text-slate-200 transition" data-minutes="25">
+          25 Phút (Pomo)
+        </button>
+        <button class="timer-preset-btn px-2 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 hover:border-emerald-500 text-slate-700 dark:text-slate-200 transition" data-minutes="45">
+          45 Phút (Đề B1)
+        </button>
+        <button class="timer-preset-btn px-2 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 hover:border-emerald-500 text-slate-700 dark:text-slate-200 transition" data-minutes="60">
+          60 Phút (BTVN)
+        </button>
+      </div>
+
+      <!-- Timer Counter Display -->
+      <div class="py-4">
+        <div id="timer-clock-display" class="text-5xl font-mono font-black text-slate-900 dark:text-white tracking-tight">
+          25:00
+        </div>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">
+          Giải quyết bài tập về nhà dứt điểm trước 17:00
+        </p>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center justify-center space-x-3">
+        <button id="timer-toggle-play" class="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm shadow-md transition active:scale-95 flex items-center justify-center space-x-2">
+          <i data-lucide="play" id="timer-play-icon" class="w-4 h-4 fill-current"></i>
+          <span id="timer-play-text">Bắt đầu</span>
+        </button>
+        <button id="timer-reset-action" class="p-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition" title="Đặt lại đồng hồ">
+          <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GEMINI AI DYNAMIC COACH & PROGRESS SYNC MODAL -->
+  <div id="gemini-modal" class="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs hidden flex items-center justify-center p-3 sm:p-5">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col border border-violet-200 dark:border-violet-900/60 shadow-2xl overflow-hidden">
+      <!-- Modal Header -->
+      <div class="p-4 sm:p-5 bg-gradient-to-r from-violet-950 via-indigo-950 to-slate-900 text-white flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="p-2.5 rounded-xl bg-violet-500/20 border border-violet-400/30 text-violet-300">
+            <i data-lucide="sparkles" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-base sm:text-lg text-white flex items-center gap-2">
+              <span>Trợ Lý Gemini AI – Điều Chỉnh Lộ Trình Hàng Ngày</span>
+            </h3>
+            <p class="text-xs text-violet-200/80">Đọc tiến độ ngày hôm qua, ghi chú BTVN sáng nay & lộ trình 45 tuần để tối ưu việc cần làm</p>
+          </div>
+        </div>
+        <button id="close-gemini-btn" class="p-1 text-violet-300 hover:text-white transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
+        <!-- Context Summary Box -->
+        <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/80 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400 flex items-center gap-1.5">
+              <i data-lucide="activity" class="w-3.5 h-3.5"></i>
+              <span>Dữ liệu thực tế của bạn sẽ gửi cho Gemini phân tích:</span>
+            </span>
+            <button id="copy-progress-prompt-btn" class="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-violet-500 flex items-center gap-1 transition" title="Copy toàn bộ báo cáo tiến độ để dán vào khung chat Gemini bất kỳ">
+              <i data-lucide="copy" class="w-3 h-3"></i>
+              <span>Copy Báo Cáo Tiến Độ</span>
+            </button>
+          </div>
+          <div id="gemini-context-preview" class="text-xs text-slate-600 dark:text-slate-300 space-y-1 font-mono bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200/70 dark:border-slate-800 max-h-32 overflow-y-auto">
+            Đang tổng hợp dữ liệu...
+          </div>
+        </div>
+
+        <!-- Custom User Request to Gemini -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            Yêu cầu hoặc tình trạng hôm nay của bạn (Tùy chọn - kết hợp với Ghi chú BTVN trên lớp):
+          </label>
+          <textarea id="gemini-custom-prompt" rows="2" placeholder="VD: Hôm nay mình hơi mệt nên muốn giảm tải phần Đọc, tập trung làm xong BTVN mệnh đề phụ và học 5 từ vựng IT kho vận..." class="w-full text-xs sm:text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 p-3 focus:ring-2 focus:ring-violet-500 focus:outline-none"></textarea>
+        </div>
+
+        <!-- Action Trigger -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+          <button id="run-gemini-adapt-btn" class="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 hover:from-violet-500 hover:to-blue-500 text-white font-bold text-xs sm:text-sm shadow-md transition flex items-center justify-center space-x-2 active:scale-98">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+            <span id="gemini-btn-label">Phân Tích Tiến Độ & Tự Động Cập Nhật To-Do Hôm Nay</span>
+          </button>
+        </div>
+
+        <!-- AI Response Output Box -->
+        <div id="gemini-response-box" class="hidden p-4 rounded-xl bg-violet-50/70 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/70 space-y-3">
+          <div class="flex items-center space-x-2 text-violet-700 dark:text-violet-300 font-bold text-xs uppercase tracking-wider">
+            <i data-lucide="bot" class="w-4 h-4"></i>
+            <span>Nhận Xét & Điều Chỉnh Từ Gemini Coach:</span>
+          </div>
+          <p id="gemini-coach-message" class="text-xs sm:text-sm text-slate-700 dark:text-slate-200 leading-relaxed"></p>
+          <div id="gemini-added-summary" class="text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-3 py-2 rounded-lg border border-emerald-200 dark:border-emerald-800"></div>
+        </div>
+
+        <!-- Optional API Key Config for External Hosting (Netlify) -->
+        <details class="group rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 p-3">
+          <summary class="text-xs font-semibold text-slate-500 dark:text-slate-400 cursor-pointer flex items-center justify-between">
+            <span class="flex items-center gap-1.5">
+              <i data-lucide="key" class="w-3.5 h-3.5 text-amber-500"></i>
+              <span>Cấu hình Gemini API Key (Chỉ cần nếu bạn chạy web riêng trên Netlify)</span>
+            </span>
+            <i data-lucide="chevron-down" class="w-4 h-4 transition group-open:rotate-180"></i>
+          </summary>
+          <div class="mt-3 space-y-2 text-xs text-slate-500 dark:text-slate-400">
+            <p>Khi chạy trong khung Preview này, AI hoạt động tự động. Nếu bạn đưa file lên <b>Netlify</b>, hãy lấy mã API Key miễn phí tại <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-violet-600 underline font-semibold">Google AI Studio</a> và dán vào đây (lưu trên trình duyệt của bạn):</p>
+            <div class="flex gap-2">
+              <input type="password" id="user-gemini-api-key" placeholder="AIzaSy..." class="flex-1 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-slate-800 dark:text-slate-100 focus:outline-none">
+              <button id="save-api-key-btn" class="px-3 py-1.5 rounded-lg bg-slate-800 text-white dark:bg-slate-700 font-semibold text-xs hover:bg-slate-700 transition">Lưu Key</button>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex justify-end">
+        <button id="close-gemini-bottom" class="px-4 py-2 text-xs font-semibold bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl text-slate-700 dark:text-slate-300 transition">
+          Đóng
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="mt-auto border-t border-slate-200/80 dark:border-slate-800/80 py-4 text-center text-xs text-slate-400 dark:text-slate-600">
+    Hệ thống To-do & Cơ sở dữ liệu Deutsch Zukunft • Tối ưu IT Logistics CHLB Đức
+  </footer>
+
+  <!-- JAVASCRIPT APPLICATION CORE -->
+  <script>
+    // ==========================================
+    // 1. DEFAULT DATA TEMPLATES (WEEKDAY, SATURDAY, SUNDAY)
+    // ==========================================
+    const WEEKDAY_BLOCKS = [
+      {
+        id: "morning",
+        title: "Khởi Động & Khóa Tiếng Đức Tập Trung",
+        timeRange: "08:00 – 13:30",
+        badge: "Trên Lớp",
+        badgeColor: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border-blue-200 dark:border-blue-900",
+        icon: "graduation-cap",
+        description: "Học tập trung 5.5 tiếng, tương tác tích cực với giáo viên và ghi chép bài mới",
+        tasks: [
+          { id: "m_1", text: "Khởi động nhẹ: Nghe 1 mẩu podcast tiếng Đức lúc chuẩn bị xuất phát", done: false, tag: "Hören" },
+          { id: "m_2", text: "Cháy hết mình trên lớp: Chủ động phát biểu và tương tác với bạn bè", done: false, tag: "Sprechen" },
+          { id: "m_3", text: "Ghi chép tối thiểu 5 cấu trúc ngữ pháp/cụm từ hay vào vở ghi chú", done: false, tag: "Wortschatz" },
+          { id: "m_4", text: "Ghi lại chính xác danh sách bài tập về nhà (BTVN) giáo viên giao", done: false, tag: "Hausaufgabe" }
+        ]
+      },
+      {
+        id: "afternoon_b1",
+        title: "Block 1: Xử Lý Dứt Điểm BTVN Của Lớp",
+        timeRange: "14:00 – 15:15",
+        badge: "Cốt Lõi",
+        badgeColor: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border-amber-200 dark:border-amber-900",
+        icon: "book-open-check",
+        description: "Sau ăn trưa & nghỉ ngơi 30p: Hoàn thành 100% bài tập trong sách Arbeitsbuch",
+        tasks: [
+          { id: "b1_1", text: "Làm bài tập Ngữ pháp & Từ vựng trong Sách bài tập (Arbeitsbuch) theo bài sáng", done: false, tag: "Grammatik" },
+          { id: "b1_2", text: "Tra cứu và làm rõ những câu chưa hiểu trong bài học sáng", done: false, tag: "Review" },
+          { id: "b1_3", text: "Viết đoạn văn / email / thư theo yêu cầu bài học (chuẩn bị nộp giáo viên)", done: false, tag: "Schreiben" }
+        ]
+      },
+      {
+        id: "afternoon_b2",
+        title: "Block 2: Luyện Kỹ Năng Thi Chuyên Sâu",
+        timeRange: "15:30 – 16:30",
+        badge: "Đề Thi B1/B2",
+        badgeColor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900",
+        icon: "headphones",
+        description: "Sau 15 phút giải lao vận động: Tập trung luyện Nghe hoặc Nói phản xạ",
+        tasks: [
+          { id: "b2_1", text: "Luyện Nghe (Hören): Giải 1 phần đề thi B1 hoặc nghe podcast công việc", done: false, tag: "Hören Teil 1-4" },
+          { id: "b2_2", text: "Luyện Nói (Sprechen): Tập thuyết trình 3 phút chủ đề CNTT / Giao thông công cộng", done: false, tag: "Sprechen Teil 2" },
+          { id: "b2_3", text: "Nhập 15 từ vựng mới vào Anki và hoàn thành lượt ôn lặp lại", done: false, tag: "Anki Repetition" }
+        ]
+      },
+      {
+        id: "afternoon_b3",
+        title: "Block 3: Hồ Sơ IT Logistics & Vũ Khí Du Học",
+        timeRange: "16:30 – 17:00",
+        badge: "Dự Án Đức",
+        badgeColor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border-indigo-200 dark:border-indigo-900",
+        icon: "file-code-2",
+        description: "Dành 30 phút dứt điểm hồ sơ UNETI, CV tiếng Đức và thuật ngữ chuyên ngành kho bãi",
+        tasks: [
+          { id: "b3_1", text: "Học 5-10 thuật ngữ tiếng Đức IT Logistics (Kho bãi thông minh, WMS, ERP, Datenbank)", done: false, tag: "Fachbegriffe" },
+          { id: "b3_2", text: "Tiến độ hồ sơ tháng: Soạn thảo CV tiếng Đức / Tìm việc Ausbildung trên stepstone.de", done: false, tag: "Lebenslauf" },
+          { id: "b3_3", text: "ĐÚNG 17:00: Dọn bàn học, đóng sách vở, chuẩn bị đồng phục đi làm ca tối!", done: false, tag: "Đi làm ca tối" }
+        ]
+      }
+    ];
+
+    // LỊCH THỨ BẢY: ĐƯỢC NGHỈ HỌC TRÊN LỚP -> TẬP TRUNG TỔNG ÔN, GIẢI ĐỀ FULL & LÀM HỒ SƠ SÂU
+    const SATURDAY_BLOCKS = [
+      {
+        id: "sat_morning_1",
+        title: "Sáng Thứ 7 (Ca 1): Tổng Kết Kiến Thức Tuần (Thứ 2 – Thứ 6)",
+        timeRange: "08:30 – 10:00",
+        badge: "Tổng Ôn Tuần",
+        badgeColor: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border-blue-200 dark:border-blue-900",
+        icon: "layers",
+        description: "Ngủ dậy thoải mái hơn ngày thường 1 tiếng, sau đó hệ thống hóa toàn bộ bài học cả tuần",
+        tasks: [
+          { id: "sat_m1", text: "Rà soát lại vở ghi từ Thứ 2 đến Thứ 6: Đánh dấu các cấu trúc ngữ pháp quan trọng nhất", done: false, tag: "Grammatik Review" },
+          { id: "sat_m2", text: "Giải quyết dứt điểm các bài tập còn tồn đọng hoặc các câu sai trong Arbeitsbuch", done: false, tag: "Arbeitsbuch" },
+          { id: "sat_m3", text: "Viết hoàn chỉnh 1 bức thư / bài luận chuẩn cấu trúc B1/B2 tổng hợp từ vựng trong tuần", done: false, tag: "Schreiben" }
+        ]
+      },
+      {
+        id: "sat_morning_2",
+        title: "Sáng Thứ 7 (Ca 2): Thực Chiến Luyện Đề Bấm Giờ (Prüfungstraining)",
+        timeRange: "10:15 – 12:00",
+        badge: "Luyện Đề Thực Chiến",
+        badgeColor: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 border-rose-200 dark:border-rose-900",
+        icon: "Flame",
+        description: "Tận dụng buổi sáng cuối tuần yên tĩnh không phải lên lớp để giải đề dưới áp lực thời gian",
+        tasks: [
+          { id: "sat_m4", text: "Bấm giờ làm 1 đề Đọc (Lesen) + Nghe (Hören) B1/B2 liên tục không tra từ điển", done: false, tag: "Full Test" },
+          { id: "sat_m5", text: "Chấm điểm, đọc kỹ Transcript phần Nghe và phân tích nguyên nhân các câu làm sai", done: false, tag: "Korrektur" },
+          { id: "sat_m6", text: "Luyện Nói (Sprechen Teil 1 & 2): Tự ghi âm 1 đề thảo luận lên kế hoạch & thuyết trình", done: false, tag: "Sprechen" }
+        ]
+      },
+      {
+        id: "sat_afternoon",
+        title: "Chiều Thứ 7: Chiến Dịch Hồ Sơ IT Logistics & Săn Hợp Đồng Đức",
+        timeRange: "14:00 – 16:30",
+        badge: "Trọng Điểm Hồ Sơ",
+        badgeColor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border-indigo-200 dark:border-indigo-900",
+        icon: "briefcase",
+        description: "Khung giờ sâu (Deep Work) để xử lý giấy tờ UNETI, CV, Thư động lực và rải đơn doanh nghiệp Đức",
+        tasks: [
+          { id: "sat_a1", text: "Thực hiện đầu việc lớn của tháng: Dịch thuật công chứng UNETI / In Anabin H+ / Tinh chỉnh CV & Thư động lực", done: false, tag: "Bewerbung" },
+          { id: "sat_a2", text: "Tìm kiếm & lưu 3-5 tin tuyển dụng Ausbildung Fachinformatiker / IT-Logistik trên StepStone, Ausbildung.de", done: false, tag: "StepStone / DHL" },
+          { id: "sat_a3", text: "Luyện trả lời 3 câu hỏi phỏng vấn bằng tiếng Đức (Tại sao chọn IT Logistics? Thế mạnh CNTT UNETI?)", done: false, tag: "Vorstellungsgespräch" },
+          { id: "sat_a4", text: "16:30 – 17:00: Kết thúc học sớm, thư giãn chuẩn bị đi làm ca tối (hoặc nghỉ ngơi cuối tuần)", done: false, tag: "Hoàn tất Thứ 7" }
+        ]
+      }
+    ];
+
+    // LỊCH CHỦ NHẬT: HỒI PHỤC NĂNG LƯỢNG, ÔN ANKI NHẸ NHÀNG & LÊN DÂY CÓT TUẦN MỚI
+    const SUNDAY_BLOCKS = [
+      {
+        id: "sun_morning",
+        title: "Sáng Chủ Nhật: Ngủ Đủ Giấc & Tái Tạo Năng Lượng",
+        timeRange: "08:00 – 13:30",
+        badge: "Nghỉ Ngơi Toàn Diện",
+        badgeColor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900",
+        icon: "coffee",
+        description: "Sau 6 ngày học và đi làm liên tục, dành trọn sáng Chủ Nhật để não bộ phục hồi sâu",
+        tasks: [
+          { id: "sun_m1", text: "Ngủ đủ giấc, tập thể dục nhẹ, cà phê hoặc đi dạo cuối tuần không áp lực sách vở", done: false, tag: "Erholung" },
+          { id: "sun_m2", text: "Dọn dẹp góc học tập gọn gàng, phân loại tài liệu/đề thi tuần qua vào bìa hồ sơ", done: false, tag: "Ordnung" }
+        ]
+      },
+      {
+        id: "sun_afternoon_1",
+        title: "Chiều Chủ Nhật (Ca 1): Duyệt Anki Tuần & Tiếng Đức Giải Trí",
+        timeRange: "14:30 – 15:45",
+        badge: "Ôn Nhẹ Nhàng",
+        badgeColor: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border-amber-200 dark:border-amber-900",
+        icon: "tv",
+        description: "Không học lý thuyết nặng: Chỉ ôn từ vựng qua Flashcard và tắm ngôn ngữ qua Video thực tế",
+        tasks: [
+          { id: "sun_a1", text: "Tổng duyệt toàn bộ thẻ từ vựng Anki đã nạp từ Thứ 2 đến Thứ 7 (đảm bảo nhớ >85%)", done: false, tag: "Anki Master" },
+          { id: "sun_a2", text: "Xem 1-2 video YouTube thực tế bằng tiếng Đức (Easy German, Vlog du học nghề IT, Kho vận DHL)", done: false, tag: "Immersion" }
+        ]
+      },
+      {
+        id: "sun_afternoon_2",
+        title: "Chiều Chủ Nhật (Ca 2): Lên Dây Cót & Xem Trước Bài Tuần Tới",
+        timeRange: "15:45 – 16:30",
+        badge: "Chuẩn Bị Tuần Mới",
+        badgeColor: "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border-purple-200 dark:border-purple-900",
+        icon: "compass",
+        description: "Chỉ 45 phút chuẩn bị giúp sáng Thứ 2 lên lớp bắt nhịp cực nhanh và tự tin",
+        tasks: [
+          { id: "sun_a3", text: "Đọc lướt trước chủ đề & từ vựng bài học sáng Thứ 2 trong giáo trình trên lớp", done: false, tag: "Preview" },
+          { id: "sun_a4", text: "Mở nút 'Lộ Trình' kiểm tra mục tiêu tuần tiếp theo trong kế hoạch Deutsch Zukunft", done: false, tag: "Wochenplan" },
+          { id: "sun_a5", text: "16:30: Đóng máy sớm, chuẩn bị đồ đạc/trang phục sẵn sàng cho tuần mới bứt phá!", done: false, tag: "Sẵn sàng" }
+        ]
+      }
+    ];
+
+    const DEFAULT_BLOCKS = WEEKDAY_BLOCKS;
+
+    // Helper: Get appropriate template blocks based on Date string (YYYY-MM-DD) or explicit mode
+    function getTemplateBlocksForDate(dateStr, forceMode = null) {
+      let mode = forceMode;
+      if (!mode) {
+        const [y, m, d] = dateStr.split('-');
+        const dateObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+        const dayOfWeek = dateObj.getDay(); // 0 = Sunday, 6 = Saturday
+        if (dayOfWeek === 6) mode = 'saturday';
+        else if (dayOfWeek === 0) mode = 'sunday';
+        else mode = 'weekday';
+      }
+
+      if (mode === 'saturday') {
+        return { mode: 'saturday', blocks: JSON.parse(JSON.stringify(SATURDAY_BLOCKS)) };
+      } else if (mode === 'sunday') {
+        return { mode: 'sunday', blocks: JSON.parse(JSON.stringify(SUNDAY_BLOCKS)) };
+      } else {
+        return { mode: 'weekday', blocks: JSON.parse(JSON.stringify(WEEKDAY_BLOCKS)) };
+      }
+    }
+
+    const ROADMAP_DATA = {
+      1: {
+        title: "GIAI ĐOẠN 1: BỒI TỤC NĂNG LỰC & CHUẨN BỊ VŨ KHÍ (10/2026 – 02/2027)",
+        points: [
+          "<strong>Tháng 10 & 11/2026 (Chốt A2 & Dịch thuật hồ sơ):</strong> Xin bằng ĐH và Bảng điểm UNETI, dịch thuật công chứng tiếng Đức, in tra cứu trạng thái trường H+ trên trang Anabin. Soạn bản nháp CV và Thư động lực (Motivationsschreiben) hệ du học nghề IT Logistics 2 năm.",
+          "<strong>Tháng 12/2026 (Bắt đầu B1 & Từ vựng IT):</strong> Làm quen dạng đề B1 Goethe/Telc, tích lũy 300 từ vựng chuyên ngành Công việc & Kho vận. Tạo tài khoản trên StepStone & Ausbildung.de.",
+          "<strong>Tháng 01/2027 (Luyện đề B1 & Nộp hồ sơ sớm):</strong> Luyện chuyên sâu Hören, tập thuyết trình Sprechen chủ đề Công nghệ / Giao thông, giải thử 5 bộ đề B1.",
+          "<strong>Tháng 02/2027 (Tổng lực bứt phá):</strong> Giải đều đặn 2-3 đề B1/tuần, đạt độ đúng >70%. Đăng ký lịch thi B1 chính thức tại Viện Goethe hoặc Telc."
+        ]
+      },
+      2: {
+        title: "GIAI ĐOẠN 2: THI ĐỖ B1 & RẢI HỒ SƠ DOANH NGHIỆP (03/2027 – 06/2027)",
+        points: [
+          "<strong>Tháng 03/2027 (Cột mốc Vàng - Thi đỗ B1):</strong> Tham gia thi B1. Không xả hơi, nộp đồng loạt 15-20 bộ hồ sơ sang các doanh nghiệp IT/Logistics ở Đức (DHL, Kuehne+Nagel, kho tự động...).",
+          "<strong>Tháng 04/2027 (Phỏng vấn & Khởi động B2):</strong> Tham gia Mock-interview thử, hoàn thành 2-3 buổi phỏng vấn trực tuyến qua Zoom/Teams. Bắt đầu học kiến thức B2 để giữ nhịp phản xạ.",
+          "<strong>Tháng 05 & 06/2027 (Chốt hợp đồng & ZAV):</strong> Ký hợp đồng đào tạo nghề gốc (Zusage), doanh nghiệp nộp hồ sơ xin giấy phép Cục việc làm liên bang Đức (ZAV)."
+        ]
+      },
+      3: {
+        title: "GIAI ĐOẠN 3: THỦ TỤC VISA & NÂNG CẤP CHẤT XÁM (07/2027 – 09/2027)",
+        points: [
+          "<strong>Tháng 07/2027:</strong> Đặt lịch hẹn và nộp hồ sơ xin Visa Ausbildung tại ĐSQ/Lãnh sự quán Đức. Tiếp tục học từ vựng chuyên môn qua báo chí Đức (Heise online, Spiegel).",
+          "<strong>Tháng 08 & 09/2027:</strong> Luyện nghe các bài giảng trường nghề 'Informatik Ausbildung' trên YouTube. Nhận kết quả Visa, mua vé máy bay, chuẩn bị laptop cấu hình mạnh."
+        ]
+      },
+      4: {
+        title: "GIAI ĐOẠN 4: CẤT CÁNH & BẮT ĐẦU SỰ NGHIỆP TẠI ĐỨC (10/2027)",
+        points: [
+          "<strong>Tuần đầu tiên:</strong> Bay sang Đức, nhận căn hộ / Ký túc xá. Hoàn tất đăng ký thường trú (Anmeldung), mở tài khoản ngân hàng và thẻ bảo hiểm.",
+          "<strong>Chính thức nhập học & đi làm:</strong> Buổi làm việc đầu tiên tại trung tâm Logistics và buổi học đầu tiên tại Berufsschule. Tận dụng bằng UNETI để rút ngắn học nghề từ 3 năm còn 2 năm!"
+        ]
+      }
+    };
+
+    // DEFAULT MASTER MILESTONES (CHECKLIST HỒ SƠ UNETI -> CHLB ĐỨC)
+    const DEFAULT_MILESTONES = [
+      { id: "ms_1", text: "Liên hệ trường ĐH UNETI xin cấp Bằng tốt nghiệp & Bảng điểm gốc", phase: "Tháng 10/2026", done: false },
+      { id: "ms_2", text: "Đem Bằng ĐH & Bảng điểm UNETI đi dịch thuật công chứng sang tiếng Đức", phase: "Tháng 11/2026", done: false },
+      { id: "ms_3", text: "Tra cứu cổng Anabin và in PDF minh chứng trường UNETI đạt chuẩn H+", phase: "Tháng 11/2026", done: false },
+      { id: "ms_4", text: "Hoàn thành bản chuẩn Lebenslauf (CV tiếng Đức) nhấn mạnh các môn CNTT cốt lõi", phase: "Tháng 11/2026", done: false },
+      { id: "ms_5", text: "Viết xong Motivationsschreiben (Thư động lực) xin học nghề IT Logistics hệ 2 năm", phase: "Tháng 11/2026", done: false },
+      { id: "ms_6", text: "Tạo hồ sơ ứng viên trên Ausbildung.de & StepStone.de (lọc mã nghề Fachinformatiker)", phase: "Tháng 12/2026", done: false },
+      { id: "ms_7", text: "Giải xong 10 bộ đề thi thử B1 (Goethe/Telc) đạt tỷ lệ trên 75%", phase: "Tháng 01-02/2027", done: false },
+      { id: "ms_8", text: "Đăng ký và thi đỗ chứng chỉ tiếng Đức B1 (Cột mốc Vàng)", phase: "Tháng 03/2027", done: false },
+      { id: "ms_9", text: "Rải đồng loạt 15-20 bộ hồ sơ sang các tập đoàn Logistics Đức (DHL, DB Schenker, Kuehne+Nagel...)", phase: "Tháng 03/2027", done: false },
+      { id: "ms_10", text: "Hoàn thành phỏng vấn doanh nghiệp Đức & Ký Hợp đồng đào tạo nghề gốc (Ausbildungsvertrag)", phase: "Tháng 04-05/2027", done: false },
+      { id: "ms_11", text: "Nhận giấy phép Cục việc làm liên bang Đức (ZAV) & Nộp hồ sơ xin Visa ĐSQ Đức", phase: "Tháng 06-07/2027", done: false },
+      { id: "ms_12", text: "Nhận Visa, đặt vé máy bay và cất cánh sang CHLB Đức nhập học kỳ mùa Đông", phase: "Tháng 09-10/2027", done: false }
+    ];
+
+    // DEFAULT IT LOGISTICS GERMAN VOCABULARY
+    const DEFAULT_VOCAB = [
+      { id: "v_1", de: "das Lagerverwaltungssystem (WMS)", vi: "Hệ thống quản lý kho hàng bằng phần mềm", tag: "IT Logistics" },
+      { id: "v_2", de: "der Fachinformatiker für Systemintegration", vi: "Chuyên viên CNTT tích hợp hệ thống (Mã nghề Ausbildung chủ lực)", tag: "Ausbildung" },
+      { id: "v_3", de: "die Lieferkette (Supply Chain)", vi: "Chuỗi cung ứng vận chuyển hàng hóa", tag: "Logistik" },
+      { id: "v_4", de: "die Datenbank / das Datenbanksystem", vi: "Cơ sở dữ liệu / Hệ quản trị CSDL (SQL, ERP)", tag: "Informatik" },
+      { id: "v_5", de: "die Automatisierungstechnik", vi: "Công nghệ tự động hóa (trong kho thông minh)", tag: "IT Logistics" },
+      { id: "v_6", de: "der Wareneingang / der Warenausgang", vi: "Khâu nhập hàng / Khâu xuất hàng", tag: "Logistik" },
+      { id: "v_7", de: "die Schnittstelle (API / Interface)", vi: "Giao diện kết nối dữ liệu giữa phần mềm kho và ERP", tag: "Informatik" },
+      { id: "v_8", de: "die Ausbildungsverkürzung (auf 2 Jahre)", vi: "Sự rút ngắn thời gian học nghề (xuống còn 2 năm nhờ bằng ĐH UNETI)", tag: "Bewerbung" },
+      { id: "v_9", de: "die Kommissionierung", vi: "Quá trình nhặt hàng và đóng gói đơn hàng theo hệ thống", tag: "Logistik" },
+      { id: "v_10", de: "die Fehlerbehebung (Troubleshooting)", vi: "Khắc phục sự cố hệ thống mạng / máy chủ kho", tag: "IT Support" }
+    ];
+
+    // ==========================================
+    // 2. INDEXEDDB DATABASE ENGINE
+    // ==========================================
+    const DB_NAME = 'DeutschZukunftDB';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'daily_tasks';
+    let dbInstance = null;
+
+    // Helper to update cloud status in header UI
+    window.updateCloudStatus = function(state, text) {
+      const label = document.getElementById('db-status-label');
+      const dot = document.getElementById('cloud-status-dot');
+      const badge = document.getElementById('cloud-badge');
+      if (label) label.textContent = text;
+
+      if (state === 'online') {
+        if (badge) badge.className = "text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center space-x-1";
+        if (dot) dot.className = "w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse";
+      } else {
+        if (badge) badge.className = "text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-800 flex items-center space-x-1";
+        if (dot) dot.className = "w-1.5 h-1.5 rounded-full bg-amber-500";
+      }
+    };
+
+    function initDatabase() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+        request.onupgradeneeded = function(e) {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            // Key is date string "YYYY-MM-DD"
+            const store = db.createObjectStore(STORE_NAME, { keyPath: 'date' });
+            store.createIndex('updatedAt', 'updatedAt', { unique: false });
+          }
+        };
+
+        request.onsuccess = function(e) {
+          dbInstance = e.target.result;
+          resolve(dbInstance);
+        };
+
+        request.onerror = function(e) {
+          console.error('IndexedDB Error:', e);
+          resolve(null);
+        };
+      });
+    }
+
+    // Save day both locally and on Cloud
+    async function saveDayData(dayData, showNotice = false) {
+      const syncLabel = document.getElementById('cloud-sync-state-text');
+      if (syncLabel) syncLabel.textContent = 'Đang lưu...';
+
+      // 1. Save locally to IndexedDB for offline capability
+      if (dbInstance) {
+        try {
+          const transaction = dbInstance.transaction([STORE_NAME], 'readwrite');
+          const store = transaction.objectStore(STORE_NAME);
+          dayData.updatedAt = Date.now();
+          store.put(dayData);
+        } catch (e) {
+          console.warn("IndexedDB save fallback:", e);
+        }
+      } else {
+        localStorage.setItem(`dz_day_${dayData.date}`, JSON.stringify(dayData));
+      }
+
+      // 2. Save directly to Cloud Storage
+      if (window.CloudDB && window.CloudDB.isReady) {
+        await window.CloudDB.saveDay(dayData);
+      }
+
+      // Update timestamp text
+      const timeStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      if (syncLabel) syncLabel.textContent = `Đã lưu lúc ${timeStr}`;
+
+      if (showNotice) {
+        showToast(`✅ Đã lưu và chốt tiến độ ngày ${formatHumanDate(dayData.date)}! Chúc bạn có ca làm việc vui vẻ.`, 'success');
+      }
+    }
+
+    // Fetch day from local storage as quick cache
+    function fetchDayLocal(dateStr) {
+      return new Promise((resolve) => {
+        if (!dbInstance) {
+          const raw = localStorage.getItem(`dz_day_${dateStr}`);
+          resolve(raw ? JSON.parse(raw) : null);
+          return;
+        }
+
+        const transaction = dbInstance.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.get(dateStr);
+
+        request.onsuccess = function(e) {
+          resolve(e.target.result || null);
+        };
+        request.onerror = function() {
+          resolve(null);
+        };
+      });
+    }
+
+    // Get all stored days for history & streak calculation (merges cloud + local)
+    async function getAllDaysCombined() {
+      if (window.CloudDB && window.CloudDB.isReady) {
+        const cloudDays = await window.CloudDB.getAllDays();
+        if (cloudDays && cloudDays.length > 0) {
+          return cloudDays;
+        }
+      }
+
+      return new Promise((resolve) => {
+        if (!dbInstance) {
+          const records = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key.startsWith('dz_day_')) {
+              try { records.push(JSON.parse(localStorage.getItem(key))); } catch(e){}
+            }
+          }
+          resolve(records);
+          return;
+        }
+
+        const transaction = dbInstance.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.getAll();
+
+        request.onsuccess = function(e) {
+          resolve(e.target.result || []);
+        };
+        request.onerror = function() {
+          resolve([]);
+        };
+      });
+    }
+
+    // ==========================================
+    // 3. APPLICATION STATE & HELPERS
+    // ==========================================
+    let activeDate = getTodayDateString();
+    let currentDayData = null;
+
+    function getTodayDateString() {
+      const d = new Date();
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function formatHumanDate(dateStr) {
+      const [y, m, d] = dateStr.split('-');
+      const dateObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+      const days = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+      const dayName = days[dateObj.getDay()];
+      return `${dayName}, ngày ${d}/${m}/${y}`;
+    }
+
+    function updateScheduleBadgeUI(mode) {
+      const badge = document.getElementById('schedule-type-badge');
+      const btnW = document.getElementById('tpl-btn-weekday');
+      const btnSat = document.getElementById('tpl-btn-saturday');
+      const btnSun = document.getElementById('tpl-btn-sunday');
+
+      [btnW, btnSat, btnSun].forEach(b => {
+        if (b) {
+          b.className = "px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 transition";
+        }
+      });
+
+      if (mode === 'saturday') {
+        if (badge) {
+          badge.textContent = "Lịch Thứ Bảy (Nghỉ Lớp • Luyện Đề & Hồ Sơ)";
+          badge.className = "text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-800";
+        }
+        if (btnSat) btnSat.className = "px-2.5 py-1 text-xs font-bold rounded-lg border border-amber-500 bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 shadow-xs transition";
+      } else if (mode === 'sunday') {
+        if (badge) {
+          badge.textContent = "Lịch Chủ Nhật (Nghỉ Lớp • Hồi Phục & Ôn Tuần)";
+          badge.className = "text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800";
+        }
+        if (btnSun) btnSun.className = "px-2.5 py-1 text-xs font-bold rounded-lg border border-emerald-500 bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 shadow-xs transition";
+      } else {
+        if (badge) {
+          badge.textContent = "Lịch Ngày Thường (T2–T6 • Học Trên Lớp)";
+          badge.className = "text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800";
+        }
+        if (btnW) btnW.className = "px-2.5 py-1 text-xs font-bold rounded-lg border border-brand-500 bg-brand-50 dark:bg-brand-950/80 text-brand-700 dark:text-brand-300 shadow-xs transition";
+      }
+    }
+
+    // Switch template manually or automatically
+    window.applyScheduleTemplate = async function(mode) {
+      if (!currentDayData) return;
+      const tpl = getTemplateBlocksForDate(activeDate, mode);
+      currentDayData.scheduleMode = tpl.mode;
+      currentDayData.blocks = tpl.blocks;
+      await saveDayData(currentDayData);
+      updateScheduleBadgeUI(tpl.mode);
+      renderApp();
+      const modeName = mode === 'saturday' ? 'Thứ Bảy (Luyện Đề & Hồ Sơ)' : mode === 'sunday' ? 'Chủ Nhật (Hồi Sức & Ôn Tuần)' : 'Ngày Thường (Thứ 2 - Thứ 6)';
+      showToast(`Đã áp dụng mẫu lịch: ${modeName}`, 'info');
+    };
+
+    async function loadDate(dateStr) {
+      activeDate = dateStr;
+      const dateInput = document.getElementById('active-date-input');
+      const dateTitle = document.getElementById('display-date-title');
+      if (dateInput) dateInput.value = activeDate;
+      if (dateTitle) dateTitle.textContent = formatHumanDate(activeDate);
+
+      const expectedTpl = getTemplateBlocksForDate(activeDate);
+
+      // 1. Initial quick load from local cache
+      let data = await fetchDayLocal(activeDate);
+      if (!data) {
+        data = {
+          date: activeDate,
+          scheduleMode: expectedTpl.mode,
+          blocks: expectedTpl.blocks,
+          completed: false,
+          updatedAt: Date.now()
+        };
+      } else if (!data.scheduleMode && (expectedTpl.mode === 'saturday' || expectedTpl.mode === 'sunday')) {
+        // Auto-upgrade weekend date if it still holds untouched default weekday blocks
+        const hasAnyDone = data.blocks && data.blocks.some(b => b.tasks && b.tasks.some(t => t.done));
+        if (!hasAnyDone) {
+          data.scheduleMode = expectedTpl.mode;
+          data.blocks = expectedTpl.blocks;
+        }
+      }
+
+      currentDayData = data;
+      updateScheduleBadgeUI(currentDayData.scheduleMode || expectedTpl.mode);
+      renderApp();
+
+      // Populate scratchpad note for this date
+      const scratchpad = document.getElementById('daily-scratchpad');
+      if (scratchpad) {
+        scratchpad.value = currentDayData.notes || '';
+      }
+
+      // 2. Subscribe to Cloud Real-time Updates
+      if (window.CloudDB && window.CloudDB.isReady) {
+        window.CloudDB.subscribeDay(activeDate, async (cloudData) => {
+          if (cloudData) {
+            if (!cloudData.scheduleMode && (expectedTpl.mode === 'saturday' || expectedTpl.mode === 'sunday')) {
+              const hasAnyDone = cloudData.blocks && cloudData.blocks.some(b => b.tasks && b.tasks.some(t => t.done));
+              if (!hasAnyDone) {
+                cloudData.scheduleMode = expectedTpl.mode;
+                cloudData.blocks = expectedTpl.blocks;
+                await window.CloudDB.saveDay(cloudData);
+              }
+            }
+            currentDayData = cloudData;
+            updateScheduleBadgeUI(currentDayData.scheduleMode || expectedTpl.mode);
+            if (scratchpad && document.activeElement !== scratchpad) {
+              scratchpad.value = currentDayData.notes || '';
+            }
+            renderApp();
+            updateStreakCounter();
+          } else {
+            // First time this date is viewed in cloud
+            await window.CloudDB.saveDay(currentDayData);
+          }
+        });
+      } else {
+        await saveDayData(currentDayData);
+      }
+
+      updateStreakCounter();
+    }
+
+    // ==========================================
+    // 4. CORE UI RENDERING & PROGRESS METRICS
+    // ==========================================
+    function renderApp() {
+      const container = document.getElementById('blocks-container');
+      if (!container || !currentDayData || !currentDayData.blocks) return;
+      container.innerHTML = '';
+
+      currentDayData.blocks.forEach((block) => {
+        const blockTasks = block.tasks || [];
+        const doneInBlock = blockTasks.filter(t => t.done).length;
+        const totalInBlock = blockTasks.length;
+        const allBlockDone = totalInBlock > 0 && doneInBlock === totalInBlock;
+
+        const section = document.createElement('div');
+        section.className = `bg-white dark:bg-slate-900 rounded-2xl border ${allBlockDone ? 'border-emerald-300 dark:border-emerald-800/80' : 'border-slate-200 dark:border-slate-800'} shadow-xs overflow-hidden transition`;
+
+        section.innerHTML = `
+          <div class="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50/50 dark:bg-slate-900/50">
+            <div class="flex items-start sm:items-center space-x-3">
+              <div class="p-2.5 rounded-xl bg-brand-50 dark:bg-slate-800 text-brand-600 dark:text-brand-400 flex-shrink-0">
+                <i data-lucide="${block.icon || 'check-square'}" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-slate-200/80 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
+                    ${block.timeRange}
+                  </span>
+                  <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${block.badgeColor || ''}">
+                    ${block.badge}
+                  </span>
+                </div>
+                <h2 class="text-sm sm:text-base font-bold text-slate-900 dark:text-white mt-1">
+                  ${block.title}
+                </h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  ${block.description || ''}
+                </p>
+              </div>
+            </div>
+            <div class="self-end sm:self-center flex items-center space-x-2">
+              <span class="text-xs font-mono font-bold px-2.5 py-1 rounded-xl ${allBlockDone ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}">
+                ${doneInBlock}/${totalInBlock}
+              </span>
+            </div>
+          </div>
+          <div class="divide-y divide-slate-100 dark:divide-slate-800/60">
+            ${blockTasks.map(task => `
+              <div onclick="toggleTask('${block.id}', '${task.id}')" class="p-3.5 sm:px-5 flex items-start justify-between gap-3 cursor-pointer hover:bg-slate-50/90 dark:hover:bg-slate-800/50 transition group select-none">
+                <div class="flex items-start space-x-3.5 flex-1">
+                  <button type="button" class="checkbox-bounce mt-0.5 w-5 h-5 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition ${task.done ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-transparent group-hover:border-brand-500'}">
+                    <i data-lucide="check" class="w-3.5 h-3.5 stroke-[3]"></i>
+                  </button>
+                  <div class="flex-1">
+                    <p class="text-xs sm:text-sm font-medium leading-relaxed transition ${task.done ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-100'}">
+                      ${task.text}
+                    </p>
+                    <div class="flex items-center gap-2 mt-1">
+                      <span class="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-md ${task.tag && task.tag.includes('Gemini') ? 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300 border border-violet-200 dark:border-violet-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}">
+                        ${task.tag || 'Nhiệm vụ'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <button onclick="event.stopPropagation(); deleteTask('${block.id}', '${task.id}')" class="opacity-0 group-hover:opacity-100 p-1.5 text-slate-300 hover:text-rose-500 dark:text-slate-600 dark:hover:text-rose-400 transition rounded-lg" title="Xóa mục này">
+                  <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        `;
+        container.appendChild(section);
+      });
+
+      updateProgressMetrics();
+      lucide.createIcons();
+    }
+
+    window.toggleTask = async function(blockId, taskId) {
+      if (!currentDayData || !currentDayData.blocks) return;
+      const block = currentDayData.blocks.find(b => b.id === blockId);
+      if (!block || !block.tasks) return;
+      const task = block.tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      task.done = !task.done;
+      await saveDayData(currentDayData);
+      renderApp();
+      updateStreakCounter();
+      if (task.done) checkAllCompletedConfetti();
+    };
+
+    window.deleteTask = async function(blockId, taskId) {
+      if (!currentDayData || !currentDayData.blocks) return;
+      const block = currentDayData.blocks.find(b => b.id === blockId);
+      if (!block || !block.tasks) return;
+      block.tasks = block.tasks.filter(t => t.id !== taskId);
+      await saveDayData(currentDayData);
+      renderApp();
+      updateStreakCounter();
+    };
+
+    function updateProgressMetrics() {
+      if (!currentDayData || !currentDayData.blocks) return;
+      let total = 0;
+      let done = 0;
+      currentDayData.blocks.forEach(b => {
+        if (b.tasks) {
+          total += b.tasks.length;
+          done += b.tasks.filter(t => t.done).length;
+        }
+      });
+
+      const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+      const doneEl = document.getElementById('done-count');
+      const totalEl = document.getElementById('total-count');
+      const pctEl = document.getElementById('progress-percent');
+      const barEl = document.getElementById('progress-bar-fill');
+
+      if (doneEl) doneEl.textContent = done;
+      if (totalEl) totalEl.textContent = total;
+      if (pctEl) pctEl.textContent = `${pct}%`;
+      if (barEl) barEl.style.width = `${pct}%`;
+    }
+
+    function checkAllCompletedConfetti() {
+      if (!currentDayData || !currentDayData.blocks) return;
+      let total = 0;
+      let done = 0;
+      currentDayData.blocks.forEach(b => {
+        if (b.tasks) {
+          total += b.tasks.length;
+          done += b.tasks.filter(t => t.done).length;
+        }
+      });
+      if (total > 0 && total === done && typeof confetti === 'function') {
+        confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+        showToast("🎉 Xuất sắc! Bạn đã hoàn thành 100% mục tiêu ngày hôm nay!", "success");
+      }
+    }
+
+    async function updateStreakCounter() {
+      const records = await getAllDaysCombined();
+      let streak = 0;
+      if (records && records.length > 0) {
+        records.forEach(r => {
+          if (r.blocks && r.blocks.some(b => b.tasks && b.tasks.some(t => t.done))) {
+            streak++;
+          }
+        });
+      }
+      const streakEl = document.getElementById('streak-counter');
+      if (streakEl) streakEl.textContent = streak;
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+      const toast = document.createElement('div');
+      const bg = type === 'success' ? 'bg-emerald-900 border-emerald-500 text-emerald-100' :
+                 type === 'error' ? 'bg-rose-900 border-rose-500 text-rose-100' :
+                 'bg-slate-900 border-brand-500 text-slate-100';
+      toast.className = `fade-in pointer-events-auto px-4 py-3 rounded-xl border shadow-lg text-xs sm:text-sm font-medium flex items-center space-x-2 ${bg}`;
+      toast.innerHTML = `<span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.remove();
+      }, 4000);
+    }
+
+    // ==========================================
+    // 5. POMODORO TIMER ENGINE
+    // ==========================================
+    let timerDuration = 25 * 60;
+    let timerTimeLeft = 25 * 60;
+    let timerInterval = null;
+    let isTimerRunning = false;
+
+    function updateTimerUI() {
+      const mins = String(Math.floor(timerTimeLeft / 60)).padStart(2, '0');
+      const secs = String(timerTimeLeft % 60).padStart(2, '0');
+      const displayStr = `${mins}:${secs}`;
+
+      const clockEl = document.getElementById('timer-clock-display');
+      const bannerClockEl = document.getElementById('timer-display-banner');
+      const bannerCard = document.getElementById('timer-active-card');
+      const playText = document.getElementById('timer-play-text');
+      const quickStatus = document.getElementById('timer-quick-status');
+
+      if (clockEl) clockEl.textContent = displayStr;
+      if (bannerClockEl) bannerClockEl.textContent = displayStr;
+      if (playText) playText.textContent = isTimerRunning ? 'Tạm dừng' : 'Bắt đầu';
+      if (quickStatus) quickStatus.textContent = isTimerRunning ? displayStr : 'Đồng Hồ 14-17h';
+
+      if (bannerCard) {
+        if (isTimerRunning || timerTimeLeft < timerDuration) {
+          bannerCard.classList.remove('hidden');
+        } else {
+          bannerCard.classList.add('hidden');
+        }
+      }
+    }
+
+    // ==========================================
+    // 6. GEMINI AI DYNAMIC PROGRESS & SCHEDULE UPDATER
+    // ==========================================
+    function getPhaseInfoForDate(dateStr) {
+      const [y, m] = dateStr.split('-').map(Number);
+      if (y === 2026 && (m === 10 || m === 11)) {
+        return "Giai đoạn 1 (Tháng 10-11/2026): Hoàn thành kiến thức A2, xin Bằng & Bảng điểm UNETI đem dịch thuật công chứng tiếng Đức, in Anabin H+, viết nháp CV & Motivationsschreiben hệ 2 năm.";
+      } else if (y === 2026 && m === 12) {
+        return "Giai đoạn 1 (Tháng 12/2026): Khởi động B1, làm quen đề Goethe/Telc, tích lũy 300 từ vựng Arbeit & Beruf / IT Logistics, tạo tài khoản Ausbildung.de & StepStone.";
+      } else if (y === 2027 && m === 1) {
+        return "Giai đoạn 1 (Tháng 01/2027): Luyện chuyên sâu Nghe (Hören) & Nói (Sprechen Teil 2 chủ đề Công nghệ/Máy tính), giải 5 bộ đề B1, gửi thử CV hoàn chỉnh.";
+      } else if (y === 2027 && m === 2) {
+        return "Giai đoạn 1 (Tháng 02/2027): Tổng lực cày đề B1 (2-3 đề/tuần, đạt >70%), ôn Sprechen Teil 1, đăng ký lịch thi B1 chính thức.";
+      } else if (y === 2027 && m === 3) {
+        return "Giai đoạn 2 (Tháng 03/2027): Thi đỗ chứng chỉ B1, rải đồng loạt 15-20 bộ hồ sơ sang các tập đoàn IT Logistics Đức, chuẩn bị bộ câu hỏi phỏng vấn.";
+      } else if (y === 2027 && (m >= 4 && m <= 6)) {
+        return "Giai đoạn 2 (Tháng 04-06/2027): Phỏng vấn trực tuyến với doanh nghiệp Đức, học lên B2, ký Hợp đồng nghề (Ausbildungsvertrag) và chờ giấy phép ZAV.";
+      } else {
+        return "Giai đoạn 3 & 4 (Tháng 07-10/2027): Nộp Visa Đại sứ quán Đức, luyện nghe giảng Informatik Ausbildung trên YouTube, bay sang Đức nhập học.";
+      }
+    }
+
+    async function buildUserProgressContext() {
+      const allDays = await getAllDaysCombined();
+      // Find yesterday or most recent previous day
+      const prevDays = allDays.filter(d => d.date < activeDate).sort((a, b) => b.date.localeCompare(a.date));
+      const lastDay = prevDays[0] || null;
+
+      let unfinishedYesterday = [];
+      if (lastDay && lastDay.blocks) {
+        lastDay.blocks.forEach(b => {
+          if (b.tasks) {
+            b.tasks.filter(t => !t.done).forEach(t => unfinishedYesterday.push(t.text));
+          }
+        });
+      }
+
+      const milestones = getMilestonesList();
+      const nextMilestones = milestones.filter(m => !m.done).slice(0, 2).map(m => `${m.text} (${m.phase})`);
+      const scratchpadNote = (document.getElementById('daily-scratchpad')?.value || currentDayData?.notes || '').trim();
+      const phaseContext = getPhaseInfoForDate(activeDate);
+
+      return {
+        date: activeDate,
+        humanDate: formatHumanDate(activeDate),
+        scheduleMode: currentDayData?.scheduleMode || 'weekday',
+        phaseContext,
+        scratchpadNote: scratchpadNote || "Chưa có ghi chú cụ thể trên lớp hôm nay.",
+        unfinishedFromPreviousDay: unfinishedYesterday,
+        upcomingMilestones: nextMilestones
+      };
+    }
+
+    async function refreshGeminiContextPreview() {
+      const previewEl = document.getElementById('gemini-context-preview');
+      if (!previewEl) return;
+      const ctx = await buildUserProgressContext();
+      previewEl.innerHTML = `
+        <div>• <b>Ngày đang chọn:</b> ${ctx.humanDate}</div>
+        <div>• <b>Trọng tâm lộ trình:</b> ${ctx.phaseContext}</div>
+        <div>• <b>Ghi chú BTVN trên lớp:</b> "${ctx.scratchpadNote}"</div>
+        <div>• <b>Việc còn tồn ngày trước (${ctx.unfinishedFromPreviousDay.length}):</b> ${ctx.unfinishedFromPreviousDay.length > 0 ? ctx.unfinishedFromPreviousDay.slice(0, 3).join('; ') : 'Đã hoàn thành hết!'}</div>
+        <div>• <b>Cột mốc hồ sơ tiếp theo:</b> ${ctx.upcomingMilestones.join(' | ')}</div>
+      `;
+    }
+
+    async function callGeminiWithBackoff(payload, userApiKey = "") {
+      const apiKey = userApiKey || "";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+      const delays = [1000, 2000, 4000];
+
+      for (let attempt = 0; attempt <= delays.length; attempt++) {
+        try {
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          return await response.json();
+        } catch (err) {
+          if (attempt === delays.length) throw err;
+          await new Promise(r => setTimeout(r, delays[attempt]));
+        }
+      }
+    }
+
+    async function runGeminiScheduleAdaptation() {
+      const btn = document.getElementById('run-gemini-adapt-btn');
+      const btnLabel = document.getElementById('gemini-btn-label');
+      const respBox = document.getElementById('gemini-response-box');
+      const coachMsg = document.getElementById('gemini-coach-message');
+      const addedSummary = document.getElementById('gemini-added-summary');
+      const customNote = document.getElementById('gemini-custom-prompt')?.value.trim() || '';
+
+      const ctx = await buildUserProgressContext();
+      const savedKey = localStorage.getItem('dz_gemini_api_key') || '';
+
+      if (btn) btn.disabled = true;
+      if (btnLabel) btnLabel.textContent = "Gemini đang phân tích tiến độ & soạn lịch...";
+
+      const availableBlocks = (currentDayData?.blocks || []).map(b => `${b.id} (${b.timeRange} - ${b.title})`).join(', ');
+
+      const systemPrompt = `Bạn là Huấn luyện viên cá nhân (Study Coach) chuyên trách lộ trình du học nghề IT Logistics Đức (kế hoạch Deutsch Zukunft) cho một kỹ sư CNTT đã tốt nghiệp trường ĐH UNETI.
+Lịch sinh hoạt cố định của học viên:
+- Thứ 2 đến Thứ 6: Sáng 08:00-13:30 học khóa tiếng Đức tập trung trên lớp. Chiều 14:00-17:00 tự học ở nhà (chia làm 3 Block: Block 1 làm BTVN, Block 2 luyện kỹ năng thi Nghe/Nói/Anki, Block 3 làm hồ sơ IT Logistics & từ vựng chuyên ngành). Đúng 17:00 phải nghỉ để đi làm ca tối.
+- Thứ 7 & Chủ Nhật: Nghỉ học trên lớp, tập trung tổng ôn tuần, giải đề bấm giờ và làm hồ sơ sâu.
+
+Nhiệm vụ của bạn:
+Dựa trên ngày hiện tại, giai đoạn trong lộ trình, ghi chú BTVN trên lớp, các việc còn nợ từ hôm trước và yêu cầu thêm của học viên:
+1. Đưa ra lời khuyên/nhận xét ngắn gọn, truyền cảm hứng và sát thực tế (coachMessage).
+2. Tạo ra 3 đến 5 nhiệm vụ (adaptiveTasks) CỤ THỂ, HÀNH ĐỘNG ĐƯỢC NGAY để đưa vào các Block buổi chiều hôm nay (chọn đúng blockId trong danh sách: ${availableBlocks}).
+3. Gợi ý 2 thuật ngữ tiếng Đức chuyên ngành IT Logistics hoặc cấu trúc ngữ pháp quan trọng liên quan đến bài học hôm nay (suggestedVocab).`;
+
+      const userQuery = `Dữ liệu tiến độ hôm nay của tôi:
+- Ngày: ${ctx.humanDate} (Chế độ lịch: ${ctx.scheduleMode})
+- Giai đoạn lộ trình Deutsch Zukunft: ${ctx.phaseContext}
+- Ghi chú bài học sáng nay & BTVN trên lớp: ${ctx.scratchpadNote}
+- Công việc chưa hoàn thành từ buổi trước: ${JSON.stringify(ctx.unfinishedFromPreviousDay)}
+- Cột mốc hồ sơ UNETI sắp tới: ${JSON.stringify(ctx.upcomingMilestones)}
+- Yêu cầu bổ sung hôm nay: ${customNote || 'Không có, hãy tối ưu hóa lịch chiều 14h-17h giúp tôi.'}`;
+
+      const payload = {
+        contents: [{ parts: [{ text: userQuery }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              coachMessage: { type: "STRING" },
+              adaptiveTasks: {
+                type: "ARRAY",
+                items: {
+                  type: "OBJECT",
+                  properties: {
+                    blockId: { type: "STRING" },
+                    text: { type: "STRING" },
+                    tag: { type: "STRING" }
+                  },
+                  propertyOrdering: ["blockId", "text", "tag"]
+                }
+              },
+              suggestedVocab: {
+                type: "ARRAY",
+                items: {
+                  type: "OBJECT",
+                  properties: {
+                    de: { type: "STRING" },
+                    vi: { type: "STRING" }
+                  },
+                  propertyOrdering: ["de", "vi"]
+                }
+              }
+            },
+            propertyOrdering: ["coachMessage", "adaptiveTasks", "suggestedVocab"]
+          }
+        }
+      };
+
+      try {
+        const result = await callGeminiWithBackoff(payload, savedKey);
+        const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!rawText) throw new Error("Empty AI response");
+
+        const parsed = JSON.parse(rawText);
+
+        // 1. Insert adaptive tasks at the top of matching blocks
+        let addedCount = 0;
+        if (parsed.adaptiveTasks && Array.isArray(parsed.adaptiveTasks)) {
+          parsed.adaptiveTasks.forEach(item => {
+            let targetBlock = currentDayData.blocks.find(b => b.id === item.blockId) || currentDayData.blocks[1] || currentDayData.blocks[0];
+            if (targetBlock) {
+              targetBlock.tasks.unshift({
+                id: 'ai_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+                text: item.text,
+                done: false,
+                tag: `✨ Gemini • ${item.tag || 'Tối ưu ngày'}`
+              });
+              addedCount++;
+            }
+          });
+        }
+
+        // 2. Add suggested vocab to IT Vocab list
+        let vocabAdded = 0;
+        if (parsed.suggestedVocab && Array.isArray(parsed.suggestedVocab)) {
+          const vocabList = getVocabList();
+          parsed.suggestedVocab.forEach(v => {
+            if (v.de && v.vi && !vocabList.some(existing => existing.de.toLowerCase() === v.de.toLowerCase())) {
+              vocabList.unshift({
+                id: 'v_ai_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5),
+                de: v.de,
+                vi: v.vi,
+                tag: 'Gemini AI'
+              });
+              vocabAdded++;
+            }
+          });
+          localStorage.setItem('dz_it_vocab', JSON.stringify(vocabList));
+        }
+
+        await saveDayData(currentDayData);
+        renderApp();
+
+        if (respBox) respBox.classList.remove('hidden');
+        if (coachMsg) coachMsg.textContent = parsed.coachMessage || '';
+        if (addedSummary) {
+          addedSummary.textContent = `✅ Đã tự động cập nhật ${addedCount} nhiệm vụ cá nhân hóa vào lịch hôm nay và nạp thêm ${vocabAdded} từ vựng mới vào Kho Từ Vựng IT!`;
+        }
+        showToast(`✨ Gemini AI đã cập nhật ${addedCount} nhiệm vụ mới cho ngày hôm nay!`, 'success');
+      } catch (err) {
+        console.warn("Gemini API call error:", err);
+        showToast("Không thể kết nối trực tiếp API (Nếu bạn đang chạy trên Netlify, hãy nhập API Key miễn phí hoặc dùng nút Copy Báo Cáo).", "error");
+      } finally {
+        if (btn) btn.disabled = false;
+        if (btnLabel) btnLabel.textContent = "Phân Tích Tiến Độ & Tự Động Cập Nhật To-Do Hôm Nay";
+        lucide.createIcons();
+      }
+    }
+
+    // ==========================================
+    // 7. ROADMAP, MILESTONES, VOCAB & HISTORY MODALS
+    // ==========================================
+    function getMilestonesList() {
+      try {
+        const raw = localStorage.getItem('dz_master_milestones');
+        return raw ? JSON.parse(raw) : DEFAULT_MILESTONES;
+      } catch (e) {
+        return DEFAULT_MILESTONES;
+      }
+    }
+
+    window.toggleMilestone = function(msId) {
+      const list = getMilestonesList();
+      const item = list.find(m => m.id === msId);
+      if (item) {
+        item.done = !item.done;
+        localStorage.setItem('dz_master_milestones', JSON.stringify(list));
+        renderRoadmapPhase('milestones');
+        if (item.done && typeof confetti === 'function') {
+          confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
+        }
+      }
+    };
+
+    function renderRoadmapPhase(phaseId) {
+      const container = document.getElementById('roadmap-phase-content');
+      if (phaseId === 'milestones') {
+        const list = getMilestonesList();
+        const doneCount = list.filter(m => m.done).length;
+        container.innerHTML = `
+          <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2.5">
+              <div>
+                <h4 class="font-bold text-sm text-indigo-600 dark:text-indigo-400">CHECKLIST 12 CỘT MỐC HỒ SƠ (UNETI ➔ CHLB ĐỨC)</h4>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Các đầu việc cố định làm 1 lần trong suốt hành trình</p>
+              </div>
+              <span class="text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
+                ${doneCount}/${list.length} Hoàn tất
+              </span>
+            </div>
+            <div class="divide-y divide-slate-200/60 dark:divide-slate-700/60">
+              ${list.map(m => `
+                <div onclick="toggleMilestone('${m.id}')" class="py-2.5 flex items-start space-x-3 cursor-pointer hover:bg-white/60 dark:hover:bg-slate-900/40 px-2 rounded-lg transition">
+                  <button class="mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0 transition ${m.done ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-transparent'}">
+                    <i data-lucide="check" class="w-3.5 h-3.5 stroke-[3]"></i>
+                  </button>
+                  <div class="flex-1">
+                    <p class="text-xs sm:text-sm font-medium ${m.done ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-100'}">${m.text}</p>
+                    <span class="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">${m.phase}</span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      const data = ROADMAP_DATA[phaseId];
+      if (!data) return;
+
+      container.innerHTML = `
+        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80">
+          <h4 class="font-bold text-sm text-brand-600 dark:text-brand-400 mb-2.5">${data.title}</h4>
+          <ul class="space-y-2.5">
+            ${data.points.map(pt => `
+              <li class="flex items-start space-x-2 text-slate-700 dark:text-slate-300">
+                <span class="text-amber-500 font-bold mt-0.5">•</span>
+                <span class="leading-relaxed">${pt}</span>
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+      `;
+    }
+
+    // IT LOGISTICS VOCABULARY & GERMAN SPEECH SYNTHESIS
+    function getVocabList() {
+      try {
+        const raw = localStorage.getItem('dz_it_vocab');
+        return raw ? JSON.parse(raw) : DEFAULT_VOCAB;
+      } catch (e) {
+        return DEFAULT_VOCAB;
+      }
+    }
+
+    window.speakGerman = function(text) {
+      if (!('speechSynthesis' in window)) {
+        showToast("Trình duyệt của bạn không hỗ trợ đọc giọng nói.", "error");
+        return;
+      }
+      window.speechSynthesis.cancel();
+      // Strip parentheses explanation for cleaner German pronunciation
+      const cleanDe = text.replace(/\(.*?\)/g, '').split('/')[0].trim();
+      const utterance = new SpeechSynthesisUtterance(cleanDe);
+      utterance.lang = 'de-DE';
+      utterance.rate = 0.92;
+      window.speechSynthesis.speak(utterance);
+    };
+
+    window.deleteVocab = function(id) {
+      const list = getVocabList().filter(v => v.id !== id);
+      localStorage.setItem('dz_it_vocab', JSON.stringify(list));
+      renderVocabModal();
+    };
+
+    function renderVocabModal() {
+      const list = getVocabList();
+      const container = document.getElementById('vocab-list-container');
+      if (!container) return;
+
+      container.innerHTML = list.map(item => `
+        <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/90 flex items-center justify-between gap-3 hover:border-amber-400 transition">
+          <div class="flex items-start space-x-3">
+            <button onclick="speakGerman('${item.de.replace(/'/g, "\\'")}')" class="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-300 transition flex-shrink-0" title="Nghe phát âm tiếng Đức">
+              <i data-lucide="volume-2" class="w-4 h-4"></i>
+            </button>
+            <div>
+              <div class="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">${item.de}</div>
+              <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">${item.vi}</div>
+            </div>
+          </div>
+          <button onclick="deleteVocab('${item.id}')" class="p-1.5 text-slate-300 hover:text-rose-500 dark:text-slate-600 dark:hover:text-rose-400 transition" title="Xóa từ này">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        </div>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    function toggleTimer() {
+      if (isTimerRunning) {
+        clearInterval(timerInterval);
+        isTimerRunning = false;
+      } else {
+        isTimerRunning = true;
+        timerInterval = setInterval(() => {
+          if (timerTimeLeft > 0) {
+            timerTimeLeft--;
+            updateTimerUI();
+          } else {
+            clearInterval(timerInterval);
+            isTimerRunning = false;
+            playChimeSound();
+            showToast("⏰ Đã kết thúc phiên học! Bạn hãy vận động nhẹ hoặc chuyển sang nhiệm vụ tiếp theo.", "success");
+            updateTimerUI();
+          }
+        }, 1000);
+      }
+      updateTimerUI();
+    }
+
+    function resetTimer(seconds) {
+      clearInterval(timerInterval);
+      isTimerRunning = false;
+      if (seconds !== undefined) {
+        timerDuration = seconds;
+      }
+      timerTimeLeft = timerDuration;
+      updateTimerUI();
+    }
+
+    function playChimeSound() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime); // E5
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15); // A5
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.8);
+      } catch (e) {
+        console.log("Audio WebAPI note");
+      }
+    }
+
+    // ==========================================
+    // 7. ROADMAP & HISTORY MODALS
+    // ==========================================
+    function renderRoadmapPhase(phaseId) {
+      const data = ROADMAP_DATA[phaseId];
+      if (!data) return;
+
+      const container = document.getElementById('roadmap-phase-content');
+      container.innerHTML = `
+        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80">
+          <h4 class="font-bold text-sm text-brand-600 dark:text-brand-400 mb-2.5">${data.title}</h4>
+          <ul class="space-y-2.5">
+            ${data.points.map(pt => `
+              <li class="flex items-start space-x-2 text-slate-700 dark:text-slate-300">
+                <span class="text-amber-500 font-bold mt-0.5">•</span>
+                <span class="leading-relaxed">${pt}</span>
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+      `;
+    }
+
+    async function renderHistoryModal() {
+      const records = await getAllDaysCombined();
+      const listContainer = document.getElementById('history-records-list');
+      listContainer.innerHTML = '';
+
+      if (!records || records.length === 0) {
+        listContainer.innerHTML = '<div class="text-center py-6 text-xs text-slate-400 italic">Chưa có bản ghi nào trong Database.</div>';
+        return;
+      }
+
+      // Sort descending by date
+      records.sort((a, b) => b.date.localeCompare(a.date));
+
+      records.forEach(rec => {
+        let total = 0;
+        let done = 0;
+        if (rec.blocks) {
+          rec.blocks.forEach(b => {
+            if (b.tasks) {
+              total += b.tasks.length;
+              done += b.tasks.filter(t => t.done).length;
+            }
+          });
+        }
+        const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+
+        const item = document.createElement('div');
+        item.className = "p-3 rounded-xl border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-800 flex items-center justify-between";
+        item.innerHTML = `
+          <div>
+            <div class="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center space-x-2">
+              <span>${formatHumanDate(rec.date)}</span>
+              ${rec.date === activeDate ? '<span class="text-[10px] px-2 py-0.5 rounded bg-brand-100 text-brand-700 dark:bg-brand-950 dark:text-brand-300 font-bold">Đang xem</span>' : ''}
+            </div>
+            <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Đã hoàn thành ${done}/${total} nhiệm vụ (${pct}%)
+            </div>
+          </div>
+          <button onclick="switchDirectDate('${rec.date}')" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-brand-50 text-slate-700 hover:text-brand-600 dark:bg-slate-700 dark:hover:bg-brand-950 dark:text-slate-200 transition">
+            Mở Ngày Này
+          </button>
+        `;
+        listContainer.appendChild(item);
+      });
+    }
+
+    window.switchDirectDate = function(targetDate) {
+      document.getElementById('history-modal').classList.add('hidden');
+      loadDate(targetDate);
+    };
+
+    // ==========================================
+    // 8. EVENT LISTENERS INITIALIZATION
+    // ==========================================
+    document.addEventListener('DOMContentLoaded', async () => {
+      // 1. Initialize Local Database
+      await initDatabase();
+
+      // 2. Initialize Cloud DB
+      if (window.CloudDB) {
+        await window.CloudDB.init();
+      }
+
+      // Theme Initialization
+      const savedTheme = localStorage.getItem('deutsch_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      applyTheme(savedTheme);
+
+      // Load Today's Data
+      await loadDate(getTodayDateString());
+
+      // Theme Toggle Button
+      document.getElementById('theme-toggle-btn').addEventListener('click', () => {
+        const isDark = document.documentElement.classList.contains('dark');
+        applyTheme(isDark ? 'light' : 'dark');
+      });
+
+      function applyTheme(theme) {
+        if (theme === 'dark') {
+          document.documentElement.classList.add('dark');
+          document.getElementById('theme-icon-dark').classList.remove('hidden');
+          document.getElementById('theme-icon-light').classList.add('hidden');
+        } else {
+          document.documentElement.classList.remove('dark');
+          document.getElementById('theme-icon-dark').classList.add('hidden');
+          document.getElementById('theme-icon-light').classList.remove('hidden');
+        }
+        localStorage.setItem('deutsch_theme', theme);
+      }
+
+      // Date Switchers
+      document.getElementById('active-date-input').addEventListener('change', (e) => {
+        if (e.target.value) loadDate(e.target.value);
+      });
+
+      document.getElementById('today-btn').addEventListener('click', () => {
+        loadDate(getTodayDateString());
+      });
+
+      document.getElementById('prev-day-btn').addEventListener('click', () => {
+        const d = new Date(activeDate);
+        d.setDate(d.getDate() - 1);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        loadDate(`${y}-${m}-${day}`);
+      });
+
+      document.getElementById('next-day-btn').addEventListener('click', () => {
+        const d = new Date(activeDate);
+        d.setDate(d.getDate() + 1);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        loadDate(`${y}-${m}-${day}`);
+      });
+
+      // Batch Action Buttons
+      const manualSaveBtn = document.getElementById('manual-save-btn');
+      if (manualSaveBtn) {
+        manualSaveBtn.addEventListener('click', async () => {
+          if (!currentDayData) return;
+          await saveDayData(currentDayData, true);
+        });
+      }
+
+      const bottomSaveBtn = document.getElementById('bottom-save-btn');
+      if (bottomSaveBtn) {
+        bottomSaveBtn.addEventListener('click', async () => {
+          if (!currentDayData) return;
+          await saveDayData(currentDayData, true);
+        });
+      }
+
+      document.getElementById('check-all-btn').addEventListener('click', async () => {
+        if (!currentDayData) return;
+        currentDayData.blocks.forEach(b => b.tasks.forEach(t => t.done = true));
+        await saveDayData(currentDayData);
+        renderApp();
+        updateStreakCounter();
+        checkAllCompletedConfetti();
+      });
+
+      document.getElementById('uncheck-all-btn').addEventListener('click', async () => {
+        if (!currentDayData) return;
+        currentDayData.blocks.forEach(b => b.tasks.forEach(t => t.done = false));
+        await saveDayData(currentDayData);
+        renderApp();
+        updateStreakCounter();
+      });
+
+      document.getElementById('reset-day-btn').addEventListener('click', async () => {
+        const tpl = getTemplateBlocksForDate(activeDate);
+        currentDayData.scheduleMode = tpl.mode;
+        currentDayData.blocks = tpl.blocks;
+        await saveDayData(currentDayData);
+        updateScheduleBadgeUI(tpl.mode);
+        renderApp();
+        updateStreakCounter();
+        showToast("Đã khôi phục nhiệm vụ mặc định theo đúng Thứ của ngày này!", "info");
+      });
+
+      // Account / Cloud Modal
+      const accountModal = document.getElementById('account-modal');
+      const openAccountBtn = document.getElementById('open-account-btn');
+      const closeAccountBtn = document.getElementById('close-account-modal');
+      const closeAccountBottom = document.getElementById('close-account-btn-bottom');
+
+      if (openAccountBtn) openAccountBtn.addEventListener('click', () => accountModal.classList.remove('hidden'));
+      if (closeAccountBtn) closeAccountBtn.addEventListener('click', () => accountModal.classList.add('hidden'));
+      if (closeAccountBottom) closeAccountBottom.addEventListener('click', () => accountModal.classList.add('hidden'));
+
+      // Add Task Modal
+      const addModal = document.getElementById('add-task-modal');
+      document.getElementById('add-task-trigger-btn').addEventListener('click', () => {
+        // Dynamically populate select options from currentDayData.blocks
+        const selectEl = document.getElementById('new-task-block');
+        if (selectEl && currentDayData && currentDayData.blocks) {
+          selectEl.innerHTML = currentDayData.blocks.map(b => 
+            `<option value="${b.id}">${b.timeRange}: ${b.title}</option>`
+          ).join('');
+        }
+        addModal.classList.remove('hidden');
+        document.getElementById('new-task-title').focus();
+      });
+      document.getElementById('close-add-modal-btn').addEventListener('click', () => addModal.classList.add('hidden'));
+      document.getElementById('cancel-add-task-btn').addEventListener('click', () => addModal.classList.add('hidden'));
+
+      document.getElementById('save-task-btn').addEventListener('click', async () => {
+        const title = document.getElementById('new-task-title').value.trim();
+        const blockId = document.getElementById('new-task-block').value;
+        const tag = document.getElementById('new-task-tag').value.trim();
+
+        if (!title) {
+          document.getElementById('new-task-title').focus();
+          return;
+        }
+
+        const block = currentDayData.blocks.find(b => b.id === blockId);
+        if (block) {
+          block.tasks.push({
+            id: 'custom_' + Date.now(),
+            text: title,
+            done: false,
+            tag: tag || 'Bổ sung'
+          });
+          await saveDayData(currentDayData);
+          renderApp();
+        }
+
+        document.getElementById('new-task-title').value = '';
+        document.getElementById('new-task-tag').value = '';
+        addModal.classList.add('hidden');
+      });
+
+      // Roadmap Modal
+      const roadmapModal = document.getElementById('roadmap-modal');
+      document.getElementById('open-roadmap-btn').addEventListener('click', () => {
+        renderRoadmapPhase('milestones');
+        roadmapModal.classList.remove('hidden');
+      });
+      document.getElementById('close-roadmap-btn').addEventListener('click', () => roadmapModal.classList.add('hidden'));
+      document.getElementById('close-roadmap-bottom').addEventListener('click', () => roadmapModal.classList.add('hidden'));
+
+      document.querySelectorAll('.roadmap-tab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          document.querySelectorAll('.roadmap-tab-btn').forEach(b => {
+            b.classList.remove('bg-white', 'dark:bg-slate-900', 'text-slate-900', 'dark:text-white', 'shadow-xs', 'font-semibold');
+            b.classList.add('text-slate-600', 'dark:text-slate-400');
+          });
+          btn.classList.add('bg-white', 'dark:bg-slate-900', 'text-slate-900', 'dark:text-white', 'shadow-xs', 'font-semibold');
+          btn.classList.remove('text-slate-600', 'dark:text-slate-400');
+          renderRoadmapPhase(btn.getAttribute('data-phase'));
+        });
+      });
+
+      // Vocab Modal Listeners
+      const vocabModal = document.getElementById('vocab-modal');
+      document.getElementById('open-vocab-btn').addEventListener('click', () => {
+        renderVocabModal();
+        vocabModal.classList.remove('hidden');
+      });
+      document.getElementById('close-vocab-btn').addEventListener('click', () => vocabModal.classList.add('hidden'));
+      document.getElementById('close-vocab-bottom').addEventListener('click', () => vocabModal.classList.add('hidden'));
+
+      document.getElementById('add-vocab-btn').addEventListener('click', () => {
+        const deInput = document.getElementById('vocab-de-input');
+        const viInput = document.getElementById('vocab-vi-input');
+        const de = deInput.value.trim();
+        const vi = viInput.value.trim();
+        if (!de || !vi) return;
+
+        const list = getVocabList();
+        list.unshift({
+          id: 'v_' + Date.now(),
+          de,
+          vi,
+          tag: 'Tự thêm'
+        });
+        localStorage.setItem('dz_it_vocab', JSON.stringify(list));
+        deInput.value = '';
+        viInput.value = '';
+        renderVocabModal();
+        showToast(`Đã lưu từ vựng "${de}" vào sổ tay!`, 'success');
+      });
+
+      // Daily Scratchpad Auto-save Listener
+      let noteTimeout = null;
+      const scratchpadEl = document.getElementById('daily-scratchpad');
+      const noteIndicator = document.getElementById('note-save-indicator');
+      if (scratchpadEl) {
+        scratchpadEl.addEventListener('input', () => {
+          if (noteIndicator) noteIndicator.textContent = 'Đang lưu ghi chú...';
+          clearTimeout(noteTimeout);
+          noteTimeout = setTimeout(async () => {
+            if (currentDayData) {
+              currentDayData.notes = scratchpadEl.value;
+              await saveDayData(currentDayData);
+              if (noteIndicator) noteIndicator.textContent = 'Đã lưu ghi chú BTVN';
+            }
+          }, 600);
+        });
+      }
+
+      // Export & Import JSON Backup in History Modal
+      document.getElementById('export-json-btn').addEventListener('click', async () => {
+        const records = await getAllDaysCombined();
+        const backupPayload = {
+          exportedAt: new Date().toISOString(),
+          dailyRecords: records,
+          milestones: getMilestonesList(),
+          vocab: getVocabList()
+        };
+        const blob = new Blob([JSON.stringify(backupPayload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `deutsch_zukunft_backup_${activeDate}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast("Đã tải file sao lưu (.json) về máy tính!", "success");
+      });
+
+      document.getElementById('import-json-input').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const parsed = JSON.parse(event.target.result);
+            if (parsed.milestones) localStorage.setItem('dz_master_milestones', JSON.stringify(parsed.milestones));
+            if (parsed.vocab) localStorage.setItem('dz_it_vocab', JSON.stringify(parsed.vocab));
+            if (parsed.dailyRecords && Array.isArray(parsed.dailyRecords)) {
+              for (const rec of parsed.dailyRecords) {
+                await saveDayData(rec);
+              }
+            }
+            await loadDate(activeDate);
+            await renderHistoryModal();
+            showToast("Khôi phục toàn bộ dữ liệu từ file Backup thành công!", "success");
+          } catch (err) {
+            showToast("File không hợp lệ, vui lòng kiểm tra lại!", "error");
+          }
+        };
+        reader.readAsText(file);
+      });
+
+      // History Modal
+      const historyModal = document.getElementById('history-modal');
+      document.getElementById('open-history-btn').addEventListener('click', async () => {
+        await renderHistoryModal();
+        historyModal.classList.remove('hidden');
+      });
+      document.getElementById('close-history-btn').addEventListener('click', () => historyModal.classList.add('hidden'));
+      document.getElementById('close-history-bottom').addEventListener('click', () => historyModal.classList.add('hidden'));
+
+      document.getElementById('clear-all-db-btn').addEventListener('click', async () => {
+        if (dbInstance) {
+          const tx = dbInstance.transaction([STORE_NAME], 'readwrite');
+          tx.objectStore(STORE_NAME).clear();
+          tx.oncomplete = async () => {
+            historyModal.classList.add('hidden');
+            await loadDate(getTodayDateString());
+            showToast("Đã xóa toàn bộ dữ liệu lịch sử CSDL!", "info");
+          };
+        }
+      });
+
+      // Pomodoro Timer Modal
+      const timerModal = document.getElementById('timer-modal');
+      document.getElementById('open-timer-btn').addEventListener('click', () => {
+        timerModal.classList.remove('hidden');
+      });
+      document.getElementById('close-timer-modal').addEventListener('click', () => timerModal.classList.add('hidden'));
+
+      document.getElementById('timer-toggle-play').addEventListener('click', toggleTimer);
+      document.getElementById('timer-reset-action').addEventListener('click', () => resetTimer());
+
+      document.getElementById('timer-banner-pause').addEventListener('click', toggleTimer);
+      document.getElementById('timer-banner-stop').addEventListener('click', () => resetTimer(25 * 60));
+
+      document.querySelectorAll('.timer-preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const mins = parseInt(btn.getAttribute('data-minutes'), 10);
+          resetTimer(mins * 60);
+          toggleTimer();
+        });
+      });
+
+      // Gemini AI Coach Modal & Quick Adapt Listeners
+      const geminiModal = document.getElementById('gemini-modal');
+      const openGeminiBtn = document.getElementById('open-gemini-btn');
+      const quickAiAdaptBtn = document.getElementById('quick-ai-adapt-btn');
+      const closeGeminiBtn = document.getElementById('close-gemini-btn');
+      const closeGeminiBottom = document.getElementById('close-gemini-bottom');
+      const runGeminiBtn = document.getElementById('run-gemini-adapt-btn');
+      const copyPromptBtn = document.getElementById('copy-progress-prompt-btn');
+      const apiKeyInput = document.getElementById('user-gemini-api-key');
+      const saveKeyBtn = document.getElementById('save-api-key-btn');
+
+      if (apiKeyInput) {
+        apiKeyInput.value = localStorage.getItem('dz_gemini_api_key') || '';
+      }
+
+      if (saveKeyBtn && apiKeyInput) {
+        saveKeyBtn.addEventListener('click', () => {
+          localStorage.setItem('dz_gemini_api_key', apiKeyInput.value.trim());
+          showToast("Đã lưu Gemini API Key trên trình duyệt của bạn!", "success");
+        });
+      }
+
+      if (openGeminiBtn) {
+        openGeminiBtn.addEventListener('click', async () => {
+          await refreshGeminiContextPreview();
+          geminiModal.classList.remove('hidden');
+        });
+      }
+
+      if (quickAiAdaptBtn) {
+        quickAiAdaptBtn.addEventListener('click', async () => {
+          await refreshGeminiContextPreview();
+          geminiModal.classList.remove('hidden');
+          runGeminiScheduleAdaptation();
+        });
+      }
+
+      if (closeGeminiBtn) closeGeminiBtn.addEventListener('click', () => geminiModal.classList.add('hidden'));
+      if (closeGeminiBottom) closeGeminiBottom.addEventListener('click', () => geminiModal.classList.add('hidden'));
+      if (runGeminiBtn) runGeminiBtn.addEventListener('click', runGeminiScheduleAdaptation);
+
+      if (copyPromptBtn) {
+        copyPromptBtn.addEventListener('click', async () => {
+          const ctx = await buildUserProgressContext();
+          const promptText = `[BÁO CÁO TIẾN ĐỘ HỌC TẬP DEUTSCH ZUKUNFT - ${ctx.humanDate}]
+- Giai đoạn hiện tại: ${ctx.phaseContext}
+- Ghi chú bài học trên lớp sáng nay (8h-13h30): "${ctx.scratchpadNote}"
+- Các nhiệm vụ chưa hoàn thành từ buổi trước: ${ctx.unfinishedFromPreviousDay.length > 0 ? ctx.unfinishedFromPreviousDay.join('; ') : 'Không có'}
+- Cột mốc hồ sơ UNETI tiếp theo: ${ctx.upcomingMilestones.join(' | ')}
+
+Hãy đóng vai Huấn luyện viên cá nhân của tôi, điều chỉnh và chia nhỏ cụ thể những việc tôi cần làm trong 3 tiếng chiều nay (14:00 - 17:00) trước khi đi làm ca tối!`;
+
+          const tempInput = document.createElement('textarea');
+          tempInput.value = promptText;
+          document.body.appendChild(tempInput);
+          tempInput.select();
+          document.execCommand('copy');
+          document.body.removeChild(tempInput);
+          showToast("📋 Đã copy Báo cáo Tiến độ! Bạn có thể dán trực tiếp vào khung chat Gemini này.", "success");
+        });
+      }
+    });
+  </script>
+</body>
+</html>
