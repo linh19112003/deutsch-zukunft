@@ -208,10 +208,10 @@
 
       <!-- Quick Actions -->
       <div class="flex items-center space-x-2">
-        <!-- Gemini AI Dynamic Coach Button -->
-        <button id="open-gemini-btn" class="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 hover:from-violet-500 hover:to-blue-500 text-white shadow-sm transition active:scale-95" title="Liên kết Gemini AI để tự động cập nhật & điều chỉnh bài tập hôm nay">
-          <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
-          <span>AI Cập Nhật Lịch</span>
+        <!-- Gemini AI Live Chat Drawer Button -->
+        <button id="open-gemini-btn" class="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 hover:from-violet-500 hover:to-blue-500 text-white shadow-sm transition active:scale-95" title="Mở khung Chat riêng với Trợ lý Gemini (Có quyền đọc & sửa lịch học trực tiếp)">
+          <i data-lucide="message-square-sparkles" class="w-3.5 h-3.5"></i>
+          <span>Chat Gemini AI</span>
         </button>
 
         <!-- IT Logistics Vocab & Flashcard Button -->
@@ -400,7 +400,7 @@
     </div>
 
     <!-- TOAST NOTIFICATION CONTAINER -->
-    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+    <div id="toast-container" class="fixed bottom-5 left-5 z-50 flex flex-col space-y-2 pointer-events-none max-w-sm"></div>
 
     <!-- TIME BLOCKS WRAPPER (DYNAMICALLY RENDERED FROM DB) -->
     <div class="space-y-5" id="blocks-container">
@@ -423,7 +423,7 @@
           <span id="note-save-indicator" class="text-[11px] font-medium text-slate-400 dark:text-slate-500">Tự động lưu</span>
           <button id="quick-ai-adapt-btn" class="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-violet-100 hover:bg-violet-200 text-violet-800 dark:bg-violet-950/90 dark:hover:bg-violet-900 dark:text-violet-300 border border-violet-300 dark:border-violet-800 transition">
             <i data-lucide="wand-sparkles" class="w-3.5 h-3.5"></i>
-            <span>AI Phân Tích & Tạo Việc Chiều Nay</span>
+            <span>Gửi Ghi Chú Sang Chat Gemini Để Sửa Lịch</span>
           </button>
         </div>
       </div>
@@ -728,99 +728,122 @@
     </div>
   </div>
 
-  <!-- GEMINI AI DYNAMIC COACH & PROGRESS SYNC MODAL -->
-  <div id="gemini-modal" class="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs hidden flex items-center justify-center p-3 sm:p-5">
-    <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col border border-violet-200 dark:border-violet-900/60 shadow-2xl overflow-hidden">
-      <!-- Modal Header -->
-      <div class="p-4 sm:p-5 bg-gradient-to-r from-violet-950 via-indigo-950 to-slate-900 text-white flex items-center justify-between">
-        <div class="flex items-center space-x-3">
-          <div class="p-2.5 rounded-xl bg-violet-500/20 border border-violet-400/30 text-violet-300">
-            <i data-lucide="sparkles" class="w-5 h-5"></i>
-          </div>
-          <div>
-            <h3 class="font-bold text-base sm:text-lg text-white flex items-center gap-2">
-              <span>Trợ Lý Gemini AI – Điều Chỉnh Lộ Trình Hàng Ngày</span>
-            </h3>
-            <p class="text-xs text-violet-200/80">Đọc tiến độ ngày hôm qua, ghi chú BTVN sáng nay & lộ trình 45 tuần để tối ưu việc cần làm</p>
-          </div>
-        </div>
-        <button id="close-gemini-btn" class="p-1 text-violet-300 hover:text-white transition">
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
-      </div>
+  <!-- FLOATING GEMINI CHAT LAUNCHER BUTTON (BOTTOM RIGHT) -->
+  <button id="floating-gemini-chat-btn" class="fixed bottom-5 right-5 z-40 group flex items-center space-x-2.5 bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 hover:from-violet-500 hover:to-blue-500 text-white px-4 py-3 rounded-2xl shadow-xl border border-white/20 transition-all duration-200 hover:scale-105 active:scale-95">
+    <div class="relative flex items-center justify-center">
+      <i data-lucide="bot" class="w-5 h-5"></i>
+      <span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-indigo-700 animate-ping"></span>
+      <span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-indigo-700"></span>
+    </div>
+    <div class="text-left">
+      <div class="text-xs font-extrabold leading-none tracking-tight">Gemini Coach Chat</div>
+      <div class="text-[10px] text-violet-100/90 font-medium mt-0.5">Đã kết nối dữ liệu học tập</div>
+    </div>
+  </button>
 
-      <!-- Modal Body -->
-      <div class="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
-        <!-- Context Summary Box -->
-        <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/80 space-y-2">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400 flex items-center gap-1.5">
-              <i data-lucide="activity" class="w-3.5 h-3.5"></i>
-              <span>Dữ liệu thực tế của bạn sẽ gửi cho Gemini phân tích:</span>
-            </span>
-            <button id="copy-progress-prompt-btn" class="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-violet-500 flex items-center gap-1 transition" title="Copy toàn bộ báo cáo tiến độ để dán vào khung chat Gemini bất kỳ">
-              <i data-lucide="copy" class="w-3 h-3"></i>
-              <span>Copy Báo Cáo Tiến Độ</span>
-            </button>
-          </div>
-          <div id="gemini-context-preview" class="text-xs text-slate-600 dark:text-slate-300 space-y-1 font-mono bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200/70 dark:border-slate-800 max-h-32 overflow-y-auto">
-            Đang tổng hợp dữ liệu...
-          </div>
+  <!-- DEDICATED GEMINI AI LIVE CHAT DRAWER (SLIDE-OVER PANEL WITH WEB READ/WRITE ACCESS) -->
+  <aside id="gemini-modal" class="fixed inset-y-0 right-0 z-50 hidden w-full sm:w-[430px] md:w-[460px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col transition-all duration-300">
+    
+    <!-- Drawer Header -->
+    <div class="p-3.5 sm:px-4 bg-gradient-to-r from-violet-950 via-indigo-950 to-slate-900 text-white flex items-center justify-between border-b border-violet-800/40">
+      <div class="flex items-center space-x-2.5">
+        <div class="p-2 rounded-xl bg-violet-500/20 border border-violet-400/30 text-violet-300 relative">
+          <i data-lucide="bot" class="w-5 h-5"></i>
+          <span class="w-2 h-2 rounded-full bg-emerald-400 absolute bottom-1 right-1"></span>
         </div>
-
-        <!-- Custom User Request to Gemini -->
         <div>
-          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-            Yêu cầu hoặc tình trạng hôm nay của bạn (Tùy chọn - kết hợp với Ghi chú BTVN trên lớp):
-          </label>
-          <textarea id="gemini-custom-prompt" rows="2" placeholder="VD: Hôm nay mình hơi mệt nên muốn giảm tải phần Đọc, tập trung làm xong BTVN mệnh đề phụ và học 5 từ vựng IT kho vận..." class="w-full text-xs sm:text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 p-3 focus:ring-2 focus:ring-violet-500 focus:outline-none"></textarea>
-        </div>
-
-        <!-- Action Trigger -->
-        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-          <button id="run-gemini-adapt-btn" class="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 hover:from-violet-500 hover:to-blue-500 text-white font-bold text-xs sm:text-sm shadow-md transition flex items-center justify-center space-x-2 active:scale-98">
-            <i data-lucide="sparkles" class="w-4 h-4"></i>
-            <span id="gemini-btn-label">Phân Tích Tiến Độ & Tự Động Cập Nhật To-Do Hôm Nay</span>
-          </button>
-        </div>
-
-        <!-- AI Response Output Box -->
-        <div id="gemini-response-box" class="hidden p-4 rounded-xl bg-violet-50/70 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/70 space-y-3">
-          <div class="flex items-center space-x-2 text-violet-700 dark:text-violet-300 font-bold text-xs uppercase tracking-wider">
-            <i data-lucide="bot" class="w-4 h-4"></i>
-            <span>Nhận Xét & Điều Chỉnh Từ Gemini Coach:</span>
+          <div class="flex items-center space-x-1.5">
+            <h3 class="font-bold text-sm sm:text-base text-white leading-tight">Gemini Study Coach</h3>
+            <span class="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">Live Access</span>
           </div>
-          <p id="gemini-coach-message" class="text-xs sm:text-sm text-slate-700 dark:text-slate-200 leading-relaxed"></p>
-          <div id="gemini-added-summary" class="text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-3 py-2 rounded-lg border border-emerald-200 dark:border-emerald-800"></div>
+          <p class="text-[11px] text-violet-200/80">Đọc tiến độ web • Sửa lịch hôm nay • Lên lịch ngày tới</p>
         </div>
-
-        <!-- Optional API Key Config for External Hosting (Netlify) -->
-        <details class="group rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 p-3">
-          <summary class="text-xs font-semibold text-slate-500 dark:text-slate-400 cursor-pointer flex items-center justify-between">
-            <span class="flex items-center gap-1.5">
-              <i data-lucide="key" class="w-3.5 h-3.5 text-amber-500"></i>
-              <span>Cấu hình Gemini API Key (Chỉ cần nếu bạn chạy web riêng trên Netlify)</span>
-            </span>
-            <i data-lucide="chevron-down" class="w-4 h-4 transition group-open:rotate-180"></i>
-          </summary>
-          <div class="mt-3 space-y-2 text-xs text-slate-500 dark:text-slate-400">
-            <p>Khi chạy trong khung Preview này, AI hoạt động tự động. Nếu bạn đưa file lên <b>Netlify</b>, hãy lấy mã API Key miễn phí tại <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-violet-600 underline font-semibold">Google AI Studio</a> và dán vào đây (lưu trên trình duyệt của bạn):</p>
-            <div class="flex gap-2">
-              <input type="password" id="user-gemini-api-key" placeholder="AIzaSy..." class="flex-1 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-slate-800 dark:text-slate-100 focus:outline-none">
-              <button id="save-api-key-btn" class="px-3 py-1.5 rounded-lg bg-slate-800 text-white dark:bg-slate-700 font-semibold text-xs hover:bg-slate-700 transition">Lưu Key</button>
-            </div>
-          </div>
-        </details>
       </div>
 
-      <!-- Modal Footer -->
-      <div class="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex justify-end">
-        <button id="close-gemini-bottom" class="px-4 py-2 text-xs font-semibold bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl text-slate-700 dark:text-slate-300 transition">
-          Đóng
+      <div class="flex items-center space-x-1">
+        <button id="toggle-api-key-bar-btn" class="p-1.5 rounded-lg text-violet-300 hover:text-white hover:bg-white/10 transition" title="Cấu hình Gemini API Key (khi chạy trên GitHub/Netlify)">
+          <i data-lucide="key" class="w-4 h-4"></i>
+        </button>
+        <button id="copy-progress-prompt-btn" class="p-1.5 rounded-lg text-violet-300 hover:text-white hover:bg-white/10 transition" title="Copy toàn bộ báo cáo tiến độ">
+          <i data-lucide="copy" class="w-4 h-4"></i>
+        </button>
+        <button id="clear-gemini-chat-btn" class="p-1.5 rounded-lg text-violet-300 hover:text-rose-300 hover:bg-white/10 transition" title="Xóa lịch sử trò chuyện">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+        </button>
+        <button id="close-gemini-btn" class="p-1.5 rounded-lg text-violet-300 hover:text-white hover:bg-white/10 transition" title="Thu nhỏ khung chat">
+          <i data-lucide="panel-right-close" class="w-5 h-5"></i>
         </button>
       </div>
     </div>
-  </div>
+
+    <!-- Collapsible API Key Config Bar -->
+    <div id="api-key-config-bar" class="hidden bg-amber-50/90 dark:bg-slate-800/95 border-b border-amber-200 dark:border-slate-700 p-3 text-xs space-y-2">
+      <div class="flex items-center justify-between">
+        <span class="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1">
+          <i data-lucide="key" class="w-3.5 h-3.5"></i>
+          <span>Gemini API Key (Dùng khi chạy trên GitHub/Netlify)</span>
+        </span>
+        <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-[11px] font-semibold text-violet-600 dark:text-violet-400 underline">Lấy Key miễn phí</a>
+      </div>
+      <div class="flex gap-1.5">
+        <input type="password" id="user-gemini-api-key" placeholder="Dán mã AIzaSy... vào đây" class="flex-1 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-slate-800 dark:text-slate-100 focus:outline-none">
+        <button id="save-api-key-btn" class="px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs transition">Lưu</button>
+      </div>
+    </div>
+
+    <!-- Live Web Context Access Bar (Collapsible Inspector) -->
+    <details class="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-xs">
+      <summary class="px-3.5 py-2 cursor-pointer flex items-center justify-between font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition select-none">
+        <span class="flex items-center space-x-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span>Quyền truy cập dữ liệu Web đang bật (Xem chi tiết)</span>
+        </span>
+        <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
+      </summary>
+      <div id="gemini-context-preview" class="px-3.5 py-2.5 border-t border-slate-200/70 dark:border-slate-700/70 font-mono text-[11px] text-slate-600 dark:text-slate-300 space-y-1 max-h-36 overflow-y-auto bg-white dark:bg-slate-900">
+        Đang đồng bộ dữ liệu trang web...
+      </div>
+    </details>
+
+    <!-- Chat Messages Stream -->
+    <div id="gemini-chat-messages" class="flex-1 overflow-y-auto p-3.5 sm:p-4 space-y-3.5 bg-slate-50/40 dark:bg-slate-950/40">
+      <!-- Messages rendered dynamically -->
+    </div>
+
+    <!-- Quick Action Prompt Chips -->
+    <div class="px-3 pt-2 pb-1 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800/80 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+      <button onclick="sendQuickPrompt('Đánh giá tiến độ hôm nay dựa trên ghi chú BTVN trên lớp và sửa lại các nhiệm vụ buổi chiều giúp mình.')" class="flex-shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-violet-50 hover:bg-violet-100 text-violet-700 dark:bg-violet-950/80 dark:text-violet-300 border border-violet-200 dark:border-violet-800 transition">
+        ✨ Tối ưu lịch chiều nay
+      </button>
+      <button onclick="sendQuickPrompt('Lên kế hoạch học tập và hồ sơ cụ thể cho 3 ngày tiếp theo (lịch trình phía sau) và lưu thẳng vào lịch giúp mình.')" class="flex-shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 border border-blue-200 dark:border-blue-800 transition">
+        🗓️ Lên lịch 3 ngày tới
+      </button>
+      <button onclick="sendQuickPrompt('Những việc mình chưa tích hoàn thành hôm nay, hãy dời sang lịch ngày mai giúp mình nhé.')" class="flex-shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200 dark:border-amber-800 transition">
+        🔄 Dời việc tồn sang mai
+      </button>
+      <button onclick="sendQuickPrompt('Theo lộ trình Deutsch Zukunft, tuần này và tuần sau mình cần ưu tiên làm gì cho hồ sơ UNETI & tiếng Đức?')" class="flex-shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition">
+        🧭 Định hướng lộ trình
+      </button>
+    </div>
+
+    <!-- Chat Input Area -->
+    <div class="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 space-y-2">
+      <div class="flex items-center justify-between px-1">
+        <label class="inline-flex items-center space-x-1.5 cursor-pointer select-none">
+          <input type="checkbox" id="gemini-auto-apply-toggle" checked class="rounded text-violet-600 focus:ring-violet-500 w-3.5 h-3.5">
+          <span class="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Cho phép Gemini tự động sửa lịch & thêm việc vào CSDL</span>
+        </label>
+        <span id="gemini-typing-status" class="hidden text-[11px] font-bold text-violet-600 dark:text-violet-400 animate-pulse">Gemini đang xử lý...</span>
+      </div>
+
+      <div class="flex items-end gap-2">
+        <textarea id="gemini-chat-input" rows="2" placeholder="Nhắn cho Gemini (VD: Chiều nay mình bận đi công chứng bằng UNETI, sửa lại lịch hôm nay và xếp lịch bù cho ngày mai giúp mình)..." class="flex-1 text-xs sm:text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 px-3 py-2 focus:ring-2 focus:ring-violet-500 focus:outline-none resize-none"></textarea>
+        <button id="gemini-send-btn" class="p-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-md transition active:scale-95 flex-shrink-0" title="Gửi tin nhắn (Enter)">
+          <i data-lucide="send" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </aside>
 
   <!-- FOOTER -->
   <footer class="mt-auto border-t border-slate-200/80 dark:border-slate-800/80 py-4 text-center text-xs text-slate-400 dark:text-slate-600">
@@ -1926,488 +1949,488 @@ Dựa trên ngày hiện tại, giai đoạn trong lộ trình, ghi chú BTVN tr
       updateTimerUI();
     }
 
-    function resetTimer(seconds) {
-      clearInterval(timerInterval);
-      isTimerRunning = false;
-      if (seconds !== undefined) {
-        timerDuration = seconds;
-      }
-      timerTimeLeft = timerDuration;
-      updateTimerUI();
-    }
+    // ==========================================
+    // 6. GEMINI AI LIVE CHAT COACH & MULTI-DAY PLANNER
+    // ==========================================
+    let geminiChatHistory = [];
 
-    function playChimeSound() {
+    function loadChatHistoryFromStorage() {
       try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime); // E5
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15); // A5
-        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.8);
+        const raw = localStorage.getItem('dz_gemini_chat_history_v2');
+        if (raw) {
+          geminiChatHistory = JSON.parse(raw);
+        }
       } catch (e) {
-        console.log("Audio WebAPI note");
+        geminiChatHistory = [];
+      }
+
+      if (!geminiChatHistory || geminiChatHistory.length === 0) {
+        geminiChatHistory = [
+          {
+            role: 'assistant',
+            text: `Chào bạn! Mình là **Gemini Study Coach** đã được kết nối trực tiếp với trang web **Deutsch Zukunft** của bạn.\n\nMình có thể đọc tiến độ nhiệm vụ hôm nay, ghi chú BTVN trên lớp, lịch sử các ngày trước và 12 cột mốc hồ sơ UNETI. Bạn có thể bảo mình:\n• *"Sửa lại lịch chiều nay theo bài học sáng nay"*\n• *"Hôm nay mình bận, hãy dời các việc chưa xong sang ngày mai"*\n• *"Lên kế hoạch chi tiết cho 3 ngày tới"*`,
+            actionsSummary: []
+          }
+        ];
       }
     }
 
-    // ==========================================
-    // 7. ROADMAP & HISTORY MODALS
-    // ==========================================
-    function renderRoadmapPhase(phaseId) {
-      const data = ROADMAP_DATA[phaseId];
-      if (!data) return;
+    function saveChatHistoryToStorage() {
+      try {
+        // Keep last 30 messages for clean performance
+        if (geminiChatHistory.length > 30) {
+          geminiChatHistory = geminiChatHistory.slice(geminiChatHistory.length - 30);
+        }
+        localStorage.setItem('dz_gemini_chat_history_v2', JSON.stringify(geminiChatHistory));
+      } catch (e) {
+        console.warn("Save chat error:", e);
+      }
+    }
 
-      const container = document.getElementById('roadmap-phase-content');
-      container.innerHTML = `
-        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80">
-          <h4 class="font-bold text-sm text-brand-600 dark:text-brand-400 mb-2.5">${data.title}</h4>
-          <ul class="space-y-2.5">
-            ${data.points.map(pt => `
-              <li class="flex items-start space-x-2 text-slate-700 dark:text-slate-300">
-                <span class="text-amber-500 font-bold mt-0.5">•</span>
-                <span class="leading-relaxed">${pt}</span>
-              </li>
-            `).join('')}
-          </ul>
-        </div>
+    function getPhaseInfoForDate(dateStr) {
+      const [y, m] = dateStr.split('-').map(Number);
+      if (y === 2026 && (m === 10 || m === 11)) {
+        return "Giai đoạn 1 (Tháng 10-11/2026): Hoàn thành kiến thức A2, xin Bằng & Bảng điểm UNETI đem dịch thuật công chứng tiếng Đức, in Anabin H+, viết nháp CV & Motivationsschreiben hệ 2 năm.";
+      } else if (y === 2026 && m === 12) {
+        return "Giai đoạn 1 (Tháng 12/2026): Khởi động B1, làm quen đề Goethe/Telc, tích lũy 300 từ vựng Arbeit & Beruf / IT Logistics, tạo tài khoản Ausbildung.de & StepStone.";
+      } else if (y === 2027 && m === 1) {
+        return "Giai đoạn 1 (Tháng 01/2027): Luyện chuyên sâu Nghe (Hören) & Nói (Sprechen Teil 2 chủ đề Công nghệ/Máy tính), giải 5 bộ đề B1, gửi thử CV hoàn chỉnh.";
+      } else if (y === 2027 && m === 2) {
+        return "Giai đoạn 1 (Tháng 02/2027): Tổng lực cày đề B1 (2-3 đề/tuần, đạt >70%), ôn Sprechen Teil 1, đăng ký lịch thi B1 chính thức.";
+      } else if (y === 2027 && m === 3) {
+        return "Giai đoạn 2 (Tháng 03/2027): Thi đỗ chứng chỉ B1, rải đồng loạt 15-20 bộ hồ sơ sang các tập đoàn IT Logistics Đức, chuẩn bị bộ câu hỏi phỏng vấn.";
+      } else if (y === 2027 && (m >= 4 && m <= 6)) {
+        return "Giai đoạn 2 (Tháng 04-06/2027): Phỏng vấn trực tuyến với doanh nghiệp Đức, học lên B2, ký Hợp đồng nghề (Ausbildungsvertrag) và chờ giấy phép ZAV.";
+      } else {
+        return "Giai đoạn 3 & 4 (Tháng 07-10/2027): Nộp Visa Đại sứ quán Đức, luyện nghe giảng Informatik Ausbildung trên YouTube, bay sang Đức nhập học.";
+      }
+    }
+
+    function getNextDateString(baseDateStr, offsetDays) {
+      const [y, m, d] = baseDateStr.split('-').map(Number);
+      const dt = new Date(y, m - 1, d);
+      dt.setDate(dt.getDate() + offsetDays);
+      const ny = dt.getFullYear();
+      const nm = String(dt.getMonth() + 1).padStart(2, '0');
+      const nd = String(dt.getDate()).padStart(2, '0');
+      return `${ny}-${nm}-${nd}`;
+    }
+
+    async function buildUserProgressContext() {
+      const allDays = await getAllDaysCombined();
+      const prevDays = allDays.filter(d => d.date < activeDate).sort((a, b) => b.date.localeCompare(a.date));
+      const lastDay = prevDays[0] || null;
+
+      let unfinishedYesterday = [];
+      if (lastDay && lastDay.blocks) {
+        lastDay.blocks.forEach(b => {
+          if (b.tasks) {
+            b.tasks.filter(t => !t.done).forEach(t => unfinishedYesterday.push(t.text));
+          }
+        });
+      }
+
+      // Detailed snapshot of current active day's tasks
+      const currentTasksSnapshot = [];
+      let totalToday = 0;
+      let doneToday = 0;
+      if (currentDayData && currentDayData.blocks) {
+        currentDayData.blocks.forEach(b => {
+          const tList = (b.tasks || []).map(t => {
+            totalToday++;
+            if (t.done) doneToday++;
+            return `${t.done ? '[ĐÃ XONG]' : '[CHƯA XONG]'} (id:${t.id}) ${t.text}`;
+          });
+          currentTasksSnapshot.push({
+            blockId: b.id,
+            title: b.title,
+            timeRange: b.timeRange,
+            tasks: tList
+          });
+        });
+      }
+
+      const milestones = getMilestonesList();
+      const pendingMilestones = milestones.filter(m => !m.done).map(m => `${m.id}: ${m.text} (${m.phase})`);
+      const doneMilestonesCount = milestones.filter(m => m.done).length;
+      const scratchpadNote = (document.getElementById('daily-scratchpad')?.value || currentDayData?.notes || '').trim();
+      const phaseContext = getPhaseInfoForDate(activeDate);
+
+      // Next 3 dates helper for accurate future scheduling
+      const upcomingDatesRef = [1, 2, 3, 4, 5].map(offset => {
+        const dStr = getNextDateString(activeDate, offset);
+        return `${dStr} (${formatHumanDate(dStr)})`;
+      });
+
+      return {
+        date: activeDate,
+        humanDate: formatHumanDate(activeDate),
+        scheduleMode: currentDayData?.scheduleMode || 'weekday',
+        progressToday: `${doneToday}/${totalToday} nhiệm vụ`,
+        currentBlocksAndTasks: currentTasksSnapshot,
+        phaseContext,
+        scratchpadNote: scratchpadNote || "Chưa có ghi chú cụ thể trên lớp hôm nay.",
+        unfinishedFromPreviousDay: unfinishedYesterday,
+        milestonesProgress: `${doneMilestonesCount}/${milestones.length}`,
+        upcomingMilestones: pendingMilestones.slice(0, 4),
+        upcomingDatesReference: upcomingDatesRef
+      };
+    }
+
+    async function refreshGeminiContextPreview() {
+      const previewEl = document.getElementById('gemini-context-preview');
+      if (!previewEl) return;
+      const ctx = await buildUserProgressContext();
+      previewEl.innerHTML = `
+        <div>• <b>Ngày đang mở:</b> ${ctx.humanDate} (${ctx.progressToday})</div>
+        <div>• <b>Giai đoạn:</b> ${ctx.phaseContext}</div>
+        <div>• <b>Ghi chú BTVN:</b> "${ctx.scratchpadNote}"</div>
+        <div>• <b>Tồn ngày trước (${ctx.unfinishedFromPreviousDay.length}):</b> ${ctx.unfinishedFromPreviousDay.length > 0 ? ctx.unfinishedFromPreviousDay.slice(0, 2).join('; ') : 'Không có'}</div>
+        <div>• <b>Hồ sơ UNETI:</b> Đã xong ${ctx.milestonesProgress} cột mốc</div>
       `;
     }
 
-    async function renderHistoryModal() {
-      const records = await getAllDaysCombined();
-      const listContainer = document.getElementById('history-records-list');
-      listContainer.innerHTML = '';
-
-      if (!records || records.length === 0) {
-        listContainer.innerHTML = '<div class="text-center py-6 text-xs text-slate-400 italic">Chưa có bản ghi nào trong Database.</div>';
-        return;
-      }
-
-      // Sort descending by date
-      records.sort((a, b) => b.date.localeCompare(a.date));
-
-      records.forEach(rec => {
-        let total = 0;
-        let done = 0;
-        if (rec.blocks) {
-          rec.blocks.forEach(b => {
-            if (b.tasks) {
-              total += b.tasks.length;
-              done += b.tasks.filter(t => t.done).length;
-            }
-          });
-        }
-        const pct = total === 0 ? 0 : Math.round((done / total) * 100);
-
-        const item = document.createElement('div');
-        item.className = "p-3 rounded-xl border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-800 flex items-center justify-between";
-        item.innerHTML = `
-          <div>
-            <div class="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center space-x-2">
-              <span>${formatHumanDate(rec.date)}</span>
-              ${rec.date === activeDate ? '<span class="text-[10px] px-2 py-0.5 rounded bg-brand-100 text-brand-700 dark:bg-brand-950 dark:text-brand-300 font-bold">Đang xem</span>' : ''}
-            </div>
-            <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Đã hoàn thành ${done}/${total} nhiệm vụ (${pct}%)
-            </div>
-          </div>
-          <button onclick="switchDirectDate('${rec.date}')" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-brand-50 text-slate-700 hover:text-brand-600 dark:bg-slate-700 dark:hover:bg-brand-950 dark:text-slate-200 transition">
-            Mở Ngày Này
-          </button>
-        `;
-        listContainer.appendChild(item);
-      });
+    function formatSimpleMarkdown(text) {
+      if (!text) return '';
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/\n/g, '<br>');
     }
 
-    window.switchDirectDate = function(targetDate) {
-      document.getElementById('history-modal').classList.add('hidden');
-      loadDate(targetDate);
-    };
+    function renderGeminiChatMessages() {
+      const container = document.getElementById('gemini-chat-messages');
+      if (!container) return;
 
-    // ==========================================
-    // 8. EVENT LISTENERS INITIALIZATION
-    // ==========================================
-    document.addEventListener('DOMContentLoaded', async () => {
-      // 1. Initialize Local Database
-      await initDatabase();
-
-      // 2. Initialize Cloud DB
-      if (window.CloudDB) {
-        await window.CloudDB.init();
-      }
-
-      // Theme Initialization
-      const savedTheme = localStorage.getItem('deutsch_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-      applyTheme(savedTheme);
-
-      // Load Today's Data
-      await loadDate(getTodayDateString());
-
-      // Theme Toggle Button
-      document.getElementById('theme-toggle-btn').addEventListener('click', () => {
-        const isDark = document.documentElement.classList.contains('dark');
-        applyTheme(isDark ? 'light' : 'dark');
-      });
-
-      function applyTheme(theme) {
-        if (theme === 'dark') {
-          document.documentElement.classList.add('dark');
-          document.getElementById('theme-icon-dark').classList.remove('hidden');
-          document.getElementById('theme-icon-light').classList.add('hidden');
+      container.innerHTML = geminiChatHistory.map(msg => {
+        if (msg.role === 'user') {
+          return `
+            <div class="flex justify-end fade-in">
+              <div class="max-w-[85%] rounded-2xl rounded-tr-xs bg-violet-600 text-white px-3.5 py-2.5 text-xs sm:text-sm shadow-xs leading-relaxed">
+                ${formatSimpleMarkdown(msg.text)}
+              </div>
+            </div>
+          `;
         } else {
-          document.documentElement.classList.remove('dark');
-          document.getElementById('theme-icon-dark').classList.add('hidden');
-          document.getElementById('theme-icon-light').classList.remove('hidden');
+          const actionsHtml = (msg.actionsSummary && msg.actionsSummary.length > 0) ? `
+            <div class="mt-2.5 pt-2.5 border-t border-violet-200/70 dark:border-slate-700 space-y-1.5">
+              <div class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>
+                <span>Đã tự động cập nhật lên trang web:</span>
+              </div>
+              <div class="space-y-1">
+                ${msg.actionsSummary.map(act => `
+                  <div class="text-[11px] bg-emerald-50/90 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 px-2.5 py-1.5 rounded-lg border border-emerald-200/80 dark:border-emerald-800/60 flex items-center justify-between gap-2">
+                    <span class="flex-1">${act.label}</span>
+                    ${act.targetDate ? `<button onclick="loadDate('${act.targetDate}')" class="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] flex-shrink-0 transition">Xem ${act.targetDate.slice(5)} ➔</button>` : ''}
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : '';
+
+          return `
+            <div class="flex justify-start fade-in">
+              <div class="max-w-[92%] rounded-2xl rounded-tl-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 text-slate-800 dark:text-slate-100 px-3.5 py-2.5 text-xs sm:text-sm shadow-xs leading-relaxed">
+                <div class="flex items-center space-x-1.5 text-[11px] font-bold text-violet-600 dark:text-violet-400 mb-1">
+                  <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                  <span>Gemini Coach</span>
+                </div>
+                <div>${formatSimpleMarkdown(msg.text)}</div>
+                ${actionsHtml}
+              </div>
+            </div>
+          `;
         }
-        localStorage.setItem('deutsch_theme', theme);
-      }
+      }).join('');
 
-      // Date Switchers
-      document.getElementById('active-date-input').addEventListener('change', (e) => {
-        if (e.target.value) loadDate(e.target.value);
-      });
+      container.scrollTop = container.scrollHeight;
+      lucide.createIcons();
+    }
 
-      document.getElementById('today-btn').addEventListener('click', () => {
-        loadDate(getTodayDateString());
-      });
+    async function callGeminiWithBackoff(payload, userApiKey = "") {
+      const apiKey = userApiKey || "";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+      const delays = [1000, 2000, 4000];
 
-      document.getElementById('prev-day-btn').addEventListener('click', () => {
-        const d = new Date(activeDate);
-        d.setDate(d.getDate() - 1);
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        loadDate(`${y}-${m}-${day}`);
-      });
-
-      document.getElementById('next-day-btn').addEventListener('click', () => {
-        const d = new Date(activeDate);
-        d.setDate(d.getDate() + 1);
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        loadDate(`${y}-${m}-${day}`);
-      });
-
-      // Batch Action Buttons
-      const manualSaveBtn = document.getElementById('manual-save-btn');
-      if (manualSaveBtn) {
-        manualSaveBtn.addEventListener('click', async () => {
-          if (!currentDayData) return;
-          await saveDayData(currentDayData, true);
-        });
-      }
-
-      const bottomSaveBtn = document.getElementById('bottom-save-btn');
-      if (bottomSaveBtn) {
-        bottomSaveBtn.addEventListener('click', async () => {
-          if (!currentDayData) return;
-          await saveDayData(currentDayData, true);
-        });
-      }
-
-      document.getElementById('check-all-btn').addEventListener('click', async () => {
-        if (!currentDayData) return;
-        currentDayData.blocks.forEach(b => b.tasks.forEach(t => t.done = true));
-        await saveDayData(currentDayData);
-        renderApp();
-        updateStreakCounter();
-        checkAllCompletedConfetti();
-      });
-
-      document.getElementById('uncheck-all-btn').addEventListener('click', async () => {
-        if (!currentDayData) return;
-        currentDayData.blocks.forEach(b => b.tasks.forEach(t => t.done = false));
-        await saveDayData(currentDayData);
-        renderApp();
-        updateStreakCounter();
-      });
-
-      document.getElementById('reset-day-btn').addEventListener('click', async () => {
-        const tpl = getTemplateBlocksForDate(activeDate);
-        currentDayData.scheduleMode = tpl.mode;
-        currentDayData.blocks = tpl.blocks;
-        await saveDayData(currentDayData);
-        updateScheduleBadgeUI(tpl.mode);
-        renderApp();
-        updateStreakCounter();
-        showToast("Đã khôi phục nhiệm vụ mặc định theo đúng Thứ của ngày này!", "info");
-      });
-
-      // Account / Cloud Modal
-      const accountModal = document.getElementById('account-modal');
-      const openAccountBtn = document.getElementById('open-account-btn');
-      const closeAccountBtn = document.getElementById('close-account-modal');
-      const closeAccountBottom = document.getElementById('close-account-btn-bottom');
-
-      if (openAccountBtn) openAccountBtn.addEventListener('click', () => accountModal.classList.remove('hidden'));
-      if (closeAccountBtn) closeAccountBtn.addEventListener('click', () => accountModal.classList.add('hidden'));
-      if (closeAccountBottom) closeAccountBottom.addEventListener('click', () => accountModal.classList.add('hidden'));
-
-      // Add Task Modal
-      const addModal = document.getElementById('add-task-modal');
-      document.getElementById('add-task-trigger-btn').addEventListener('click', () => {
-        // Dynamically populate select options from currentDayData.blocks
-        const selectEl = document.getElementById('new-task-block');
-        if (selectEl && currentDayData && currentDayData.blocks) {
-          selectEl.innerHTML = currentDayData.blocks.map(b => 
-            `<option value="${b.id}">${b.timeRange}: ${b.title}</option>`
-          ).join('');
-        }
-        addModal.classList.remove('hidden');
-        document.getElementById('new-task-title').focus();
-      });
-      document.getElementById('close-add-modal-btn').addEventListener('click', () => addModal.classList.add('hidden'));
-      document.getElementById('cancel-add-task-btn').addEventListener('click', () => addModal.classList.add('hidden'));
-
-      document.getElementById('save-task-btn').addEventListener('click', async () => {
-        const title = document.getElementById('new-task-title').value.trim();
-        const blockId = document.getElementById('new-task-block').value;
-        const tag = document.getElementById('new-task-tag').value.trim();
-
-        if (!title) {
-          document.getElementById('new-task-title').focus();
-          return;
-        }
-
-        const block = currentDayData.blocks.find(b => b.id === blockId);
-        if (block) {
-          block.tasks.push({
-            id: 'custom_' + Date.now(),
-            text: title,
-            done: false,
-            tag: tag || 'Bổ sung'
+      for (let attempt = 0; attempt <= delays.length; attempt++) {
+        try {
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
           });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          return await response.json();
+        } catch (err) {
+          if (attempt === delays.length) throw err;
+          await new Promise(r => setTimeout(r, delays[attempt]));
+        }
+      }
+    }
+
+    // Apply structured actions from Gemini directly to the Web App & Database (Today + Future Dates)
+    async function executeGeminiWebActions(parsedResponse) {
+      const autoApply = document.getElementById('gemini-auto-apply-toggle')?.checked !== false;
+      const summaryLogs = [];
+      if (!autoApply) return summaryLogs;
+
+      // 1. Modify Today's Tasks (add, delete, complete, or replace)
+      if (parsedResponse.todayChanges && Array.isArray(parsedResponse.todayChanges) && currentDayData) {
+        let modifiedToday = false;
+        for (const change of parsedResponse.todayChanges) {
+          const action = (change.action || 'add').toLowerCase();
+          let targetBlock = currentDayData.blocks.find(b => b.id === change.blockId) || currentDayData.blocks[1] || currentDayData.blocks[0];
+
+          if (action === 'add' && change.taskText && targetBlock) {
+            targetBlock.tasks.unshift({
+              id: 'ai_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+              text: change.taskText,
+              done: false,
+              tag: `✨ Gemini • ${change.tag || 'Hôm nay'}`
+            });
+            modifiedToday = true;
+            summaryLogs.push({ label: `➕ Đã thêm vào hôm nay (${targetBlock.timeRange}): "${change.taskText}"` });
+          } else if (action === 'complete' && change.taskId) {
+            currentDayData.blocks.forEach(b => {
+              const t = (b.tasks || []).find(item => item.id === change.taskId);
+              if (t) {
+                t.done = true;
+                modifiedToday = true;
+                summaryLogs.push({ label: `✅ Đã đánh dấu hoàn thành: "${t.text}"` });
+              }
+            });
+          } else if (action === 'delete' && change.taskId) {
+            currentDayData.blocks.forEach(b => {
+              const beforeLen = (b.tasks || []).length;
+              b.tasks = (b.tasks || []).filter(item => item.id !== change.taskId);
+              if (b.tasks.length < beforeLen) {
+                modifiedToday = true;
+                summaryLogs.push({ label: `🗑️ Đã gỡ 1 nhiệm vụ cũ khỏi lịch hôm nay` });
+              }
+            });
+          }
+        }
+
+        if (modifiedToday) {
           await saveDayData(currentDayData);
           renderApp();
         }
-
-        document.getElementById('new-task-title').value = '';
-        document.getElementById('new-task-tag').value = '';
-        addModal.classList.add('hidden');
-      });
-
-      // Roadmap Modal
-      const roadmapModal = document.getElementById('roadmap-modal');
-      document.getElementById('open-roadmap-btn').addEventListener('click', () => {
-        renderRoadmapPhase('milestones');
-        roadmapModal.classList.remove('hidden');
-      });
-      document.getElementById('close-roadmap-btn').addEventListener('click', () => roadmapModal.classList.add('hidden'));
-      document.getElementById('close-roadmap-bottom').addEventListener('click', () => roadmapModal.classList.add('hidden'));
-
-      document.querySelectorAll('.roadmap-tab-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          document.querySelectorAll('.roadmap-tab-btn').forEach(b => {
-            b.classList.remove('bg-white', 'dark:bg-slate-900', 'text-slate-900', 'dark:text-white', 'shadow-xs', 'font-semibold');
-            b.classList.add('text-slate-600', 'dark:text-slate-400');
-          });
-          btn.classList.add('bg-white', 'dark:bg-slate-900', 'text-slate-900', 'dark:text-white', 'shadow-xs', 'font-semibold');
-          btn.classList.remove('text-slate-600', 'dark:text-slate-400');
-          renderRoadmapPhase(btn.getAttribute('data-phase'));
-        });
-      });
-
-      // Vocab Modal Listeners
-      const vocabModal = document.getElementById('vocab-modal');
-      document.getElementById('open-vocab-btn').addEventListener('click', () => {
-        renderVocabModal();
-        vocabModal.classList.remove('hidden');
-      });
-      document.getElementById('close-vocab-btn').addEventListener('click', () => vocabModal.classList.add('hidden'));
-      document.getElementById('close-vocab-bottom').addEventListener('click', () => vocabModal.classList.add('hidden'));
-
-      document.getElementById('add-vocab-btn').addEventListener('click', () => {
-        const deInput = document.getElementById('vocab-de-input');
-        const viInput = document.getElementById('vocab-vi-input');
-        const de = deInput.value.trim();
-        const vi = viInput.value.trim();
-        if (!de || !vi) return;
-
-        const list = getVocabList();
-        list.unshift({
-          id: 'v_' + Date.now(),
-          de,
-          vi,
-          tag: 'Tự thêm'
-        });
-        localStorage.setItem('dz_it_vocab', JSON.stringify(list));
-        deInput.value = '';
-        viInput.value = '';
-        renderVocabModal();
-        showToast(`Đã lưu từ vựng "${de}" vào sổ tay!`, 'success');
-      });
-
-      // Daily Scratchpad Auto-save Listener
-      let noteTimeout = null;
-      const scratchpadEl = document.getElementById('daily-scratchpad');
-      const noteIndicator = document.getElementById('note-save-indicator');
-      if (scratchpadEl) {
-        scratchpadEl.addEventListener('input', () => {
-          if (noteIndicator) noteIndicator.textContent = 'Đang lưu ghi chú...';
-          clearTimeout(noteTimeout);
-          noteTimeout = setTimeout(async () => {
-            if (currentDayData) {
-              currentDayData.notes = scratchpadEl.value;
-              await saveDayData(currentDayData);
-              if (noteIndicator) noteIndicator.textContent = 'Đã lưu ghi chú BTVN';
-            }
-          }, 600);
-        });
       }
 
-      // Export & Import JSON Backup in History Modal
-      document.getElementById('export-json-btn').addEventListener('click', async () => {
-        const records = await getAllDaysCombined();
-        const backupPayload = {
-          exportedAt: new Date().toISOString(),
-          dailyRecords: records,
-          milestones: getMilestonesList(),
-          vocab: getVocabList()
-        };
-        const blob = new Blob([JSON.stringify(backupPayload, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `deutsch_zukunft_backup_${activeDate}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        showToast("Đã tải file sao lưu (.json) về máy tính!", "success");
-      });
+      // 2. Schedule Tasks for Upcoming / Future Days ("Lịch trình phía sau")
+      if (parsedResponse.futureSchedule && Array.isArray(parsedResponse.futureSchedule)) {
+        const groupedByDate = {};
+        parsedResponse.futureSchedule.forEach(item => {
+          if (!item.targetDate || !item.taskText) return;
+          if (!groupedByDate[item.targetDate]) groupedByDate[item.targetDate] = [];
+          groupedByDate[item.targetDate].push(item);
+        });
 
-      document.getElementById('import-json-input').addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-          try {
-            const parsed = JSON.parse(event.target.result);
-            if (parsed.milestones) localStorage.setItem('dz_master_milestones', JSON.stringify(parsed.milestones));
-            if (parsed.vocab) localStorage.setItem('dz_it_vocab', JSON.stringify(parsed.vocab));
-            if (parsed.dailyRecords && Array.isArray(parsed.dailyRecords)) {
-              for (const rec of parsed.dailyRecords) {
-                await saveDayData(rec);
-              }
+        for (const [targetDate, items] of Object.entries(groupedByDate)) {
+          let futureDayRecord = await fetchDayLocal(targetDate);
+          const expectedTpl = getTemplateBlocksForDate(targetDate);
+          if (!futureDayRecord) {
+            futureDayRecord = {
+              date: targetDate,
+              scheduleMode: expectedTpl.mode,
+              blocks: expectedTpl.blocks,
+              completed: false,
+              updatedAt: Date.now()
+            };
+          }
+
+          items.forEach(item => {
+            let block = futureDayRecord.blocks.find(b => b.id === item.blockId) || futureDayRecord.blocks[1] || futureDayRecord.blocks[0];
+            if (block) {
+              block.tasks.unshift({
+                id: 'ai_fut_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+                text: item.taskText,
+                done: false,
+                tag: `🗓️ Kế hoạch AI • ${item.tag || 'Lịch phía sau'}`
+              });
             }
-            await loadDate(activeDate);
-            await renderHistoryModal();
-            showToast("Khôi phục toàn bộ dữ liệu từ file Backup thành công!", "success");
-          } catch (err) {
-            showToast("File không hợp lệ, vui lòng kiểm tra lại!", "error");
+          });
+
+          await saveDayData(futureDayRecord);
+          summaryLogs.push({
+            label: `📅 Đã lên lịch ngày ${formatHumanDate(targetDate)}: +${items.length} nhiệm vụ mới`,
+            targetDate: targetDate
+          });
+        }
+      }
+
+      // 3. Add Suggested Vocabulary to IT Logistics Vocab Bank
+      if (parsedResponse.suggestedVocab && Array.isArray(parsedResponse.suggestedVocab) && parsedResponse.suggestedVocab.length > 0) {
+        const vocabList = getVocabList();
+        let addedVocab = 0;
+        parsedResponse.suggestedVocab.forEach(v => {
+          if (v.de && v.vi && !vocabList.some(ex => ex.de.toLowerCase() === v.de.toLowerCase())) {
+            vocabList.unshift({
+              id: 'v_ai_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5),
+              de: v.de,
+              vi: v.vi,
+              tag: 'Gemini AI'
+            });
+            addedVocab++;
+          }
+        });
+        if (addedVocab > 0) {
+          localStorage.setItem('dz_it_vocab', JSON.stringify(vocabList));
+          summaryLogs.push({ label: `📚 Đã nạp +${addedVocab} từ vựng mới vào Sổ tay Từ Vựng IT` });
+        }
+      }
+
+      return summaryLogs;
+    }
+
+    window.sendQuickPrompt = function(promptText) {
+      const inputEl = document.getElementById('gemini-chat-input');
+      if (inputEl) {
+        inputEl.value = promptText;
+        sendGeminiChatMessage();
+      }
+    };
+
+    async function sendGeminiChatMessage() {
+      const inputEl = document.getElementById('gemini-chat-input');
+      const sendBtn = document.getElementById('gemini-send-btn');
+      const typingStatus = document.getElementById('gemini-typing-status');
+      const userText = (inputEl?.value || '').trim();
+      if (!userText) return;
+
+      inputEl.value = '';
+      geminiChatHistory.push({ role: 'user', text: userText });
+      saveChatHistoryToStorage();
+      renderGeminiChatMessages();
+
+      if (sendBtn) sendBtn.disabled = true;
+      if (typingStatus) typingStatus.classList.remove('hidden');
+
+      try {
+        const ctx = await buildUserProgressContext();
+        await refreshGeminiContextPreview();
+        const savedKey = localStorage.getItem('dz_gemini_api_key') || '';
+        const availableBlocks = (currentDayData?.blocks || []).map(b => `${b.id} (${b.timeRange}: ${b.title})`).join(', ');
+
+        // Include recent conversation turns so Gemini remembers the chat context
+        const recentConversation = geminiChatHistory.slice(-6).map(m => `${m.role === 'user' ? 'Học viên' : 'Gemini'}: ${m.text}`).join('\n');
+
+        const systemPrompt = `Bạn là Trợ lý Huấn luyện viên cá nhân (Gemini Study Coach) được tích hợp trực tiếp và có QUYỀN TRUY CẬP ĐỌC/GHI vào ứng dụng web quản lý học tập "Deutsch Zukunft" của một kỹ sư CNTT tốt nghiệp trường ĐH UNETI, đang học tiếng Đức để đi du học nghề IT Logistics (Fachinformatiker) hệ rút ngắn 2 năm tại CHLB Đức.
+
+Lịch trình sinh hoạt cố định của học viên:
+- Thứ 2 - Thứ 6: Sáng 08:00-13:30 học khóa tiếng Đức trên lớp. Chiều 14:00-17:00 tự học ở nhà (Block 1: BTVN, Block 2: Luyện đề Nghe/Nói/Anki, Block 3: Hồ sơ IT Logistics & từ vựng). Đúng 17:00 nghỉ để đi làm ca tối.
+- Thứ 7 & Chủ Nhật: Nghỉ học trên lớp, dành thời gian tổng ôn tuần, giải đề bấm giờ và làm sâu hồ sơ UNETI/CV/StepStone.
+
+DỮ LIỆU TRANG WEB HIỆN TẠI BẠN ĐANG ĐỌC ĐƯỢC:
+- Ngày đang mở trên web: ${ctx.date} (${ctx.humanDate}) - Chế độ lịch: ${ctx.scheduleMode}
+- Tiến độ hôm nay: ${ctx.progressToday}
+- Chi tiết các Block và nhiệm vụ hôm nay (kèm id): ${JSON.stringify(ctx.currentBlocksAndTasks)}
+- Ghi chú bài học sáng nay & BTVN trên lớp: "${ctx.scratchpadNote}"
+- Các việc còn tồn từ ngày hôm trước: ${JSON.stringify(ctx.unfinishedFromPreviousDay)}
+- Giai đoạn trong lộ trình 45 tuần (10/2026 - 10/2027): ${ctx.phaseContext}
+- Tiến độ 12 cột mốc hồ sơ UNETI: ${ctx.milestonesProgress} (Các mốc sắp tới: ${JSON.stringify(ctx.upcomingMilestones)})
+- Danh sách mã ngày tiếp theo (để xếp lịch phía sau chính xác): ${JSON.stringify(ctx.upcomingDatesReference)}
+
+QUY TẮC PHẢN HỒI:
+1. Trả lời tự nhiên, sâu sắc, rõ ràng trong trường "reply" (hỗ trợ in đậm **text** và xuống dòng). Đưa ra nhận xét về tiến độ hiện tại, giải đáp câu hỏi tiếng Đức/hồ sơ hoặc đề xuất kế hoạch sửa đổi.
+2. Nếu học viên yêu cầu sửa đổi kế hoạch hôm nay, tối ưu lịch chiều nay, hoặc thêm/xóa/hoàn thành việc hôm nay -> hãy điền vào mảng "todayChanges" (chọn đúng blockId trong: ${availableBlocks}).
+3. Nếu học viên yêu cầu lên lịch cho ngày mai, các ngày tới, hoặc dời việc sang các ngày sau ("lịch trình phía sau") -> hãy điền vào mảng "futureSchedule" với đúng định dạng "targetDate" là "YYYY-MM-DD" (tham khảo danh sách ngày tiếp theo ở trên) và "blockId" ("afternoon_b1", "afternoon_b2", "afternoon_b3" cho ngày thường, hoặc "sat_morning_1", "sat_afternoon", "sun_afternoon_1" cho cuối tuần).
+4. Nếu phù hợp với bài học, gợi ý thêm 1-2 từ vựng tiếng Đức chuyên ngành vào "suggestedVocab".`;
+
+        const userQuery = `Lịch sử trò chuyện gần đây:\n${recentConversation}\n\nTin nhắn mới nhất của học viên: "${userText}"`;
+
+        const payload = {
+          contents: [{ parts: [{ text: userQuery }] }],
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "OBJECT",
+              properties: {
+                reply: { type: "STRING" },
+                todayChanges: {
+                  type: "ARRAY",
+                  items: {
+                    type: "OBJECT",
+                    properties: {
+                      action: { type: "STRING" },
+                      blockId: { type: "STRING" },
+                      taskId: { type: "STRING" },
+                      taskText: { type: "STRING" },
+                      tag: { type: "STRING" }
+                    },
+                    propertyOrdering: ["action", "blockId", "taskId", "taskText", "tag"]
+                  }
+                },
+                futureSchedule: {
+                  type: "ARRAY",
+                  items: {
+                    type: "OBJECT",
+                    properties: {
+                      targetDate: { type: "STRING" },
+                      blockId: { type: "STRING" },
+                      taskText: { type: "STRING" },
+                      tag: { type: "STRING" }
+                    },
+                    propertyOrdering: ["targetDate", "blockId", "taskText", "tag"]
+                  }
+                },
+                suggestedVocab: {
+                  type: "ARRAY",
+                  items: {
+                    type: "OBJECT",
+                    properties: {
+                      de: { type: "STRING" },
+                      vi: { type: "STRING" }
+                    },
+                    propertyOrdering: ["de", "vi"]
+                  }
+                }
+              },
+              propertyOrdering: ["reply", "todayChanges", "futureSchedule", "suggestedVocab"]
+            }
           }
         };
-        reader.readAsText(file);
-      });
 
-      // History Modal
-      const historyModal = document.getElementById('history-modal');
-      document.getElementById('open-history-btn').addEventListener('click', async () => {
-        await renderHistoryModal();
-        historyModal.classList.remove('hidden');
-      });
-      document.getElementById('close-history-btn').addEventListener('click', () => historyModal.classList.add('hidden'));
-      document.getElementById('close-history-bottom').addEventListener('click', () => historyModal.classList.add('hidden'));
+        const result = await callGeminiWithBackoff(payload, savedKey);
+        const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!rawText) throw new Error("Empty AI response");
 
-      document.getElementById('clear-all-db-btn').addEventListener('click', async () => {
-        if (dbInstance) {
-          const tx = dbInstance.transaction([STORE_NAME], 'readwrite');
-          tx.objectStore(STORE_NAME).clear();
-          tx.oncomplete = async () => {
-            historyModal.classList.add('hidden');
-            await loadDate(getTodayDateString());
-            showToast("Đã xóa toàn bộ dữ liệu lịch sử CSDL!", "info");
-          };
+        const parsed = JSON.parse(rawText);
+        const actionsSummary = await executeGeminiWebActions(parsed);
+
+        geminiChatHistory.push({
+          role: 'assistant',
+          text: parsed.reply || 'Mình đã cập nhật kế hoạch học tập cho bạn!',
+          actionsSummary
+        });
+        saveChatHistoryToStorage();
+        renderGeminiChatMessages();
+        await refreshGeminiContextPreview();
+
+        if (actionsSummary.length > 0) {
+          showToast(`✨ Gemini đã thực hiện ${actionsSummary.length} cập nhật vào lịch học của bạn!`, 'success');
         }
-      });
-
-      // Pomodoro Timer Modal
-      const timerModal = document.getElementById('timer-modal');
-      document.getElementById('open-timer-btn').addEventListener('click', () => {
-        timerModal.classList.remove('hidden');
-      });
-      document.getElementById('close-timer-modal').addEventListener('click', () => timerModal.classList.add('hidden'));
-
-      document.getElementById('timer-toggle-play').addEventListener('click', toggleTimer);
-      document.getElementById('timer-reset-action').addEventListener('click', () => resetTimer());
-
-      document.getElementById('timer-banner-pause').addEventListener('click', toggleTimer);
-      document.getElementById('timer-banner-stop').addEventListener('click', () => resetTimer(25 * 60));
-
-      document.querySelectorAll('.timer-preset-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const mins = parseInt(btn.getAttribute('data-minutes'), 10);
-          resetTimer(mins * 60);
-          toggleTimer();
+      } catch (err) {
+        console.warn("Gemini Chat error:", err);
+        geminiChatHistory.push({
+          role: 'assistant',
+          text: `⚠️ Chưa kết nối được máy chủ Gemini AI. Nếu bạn đang mở web trên **GitHub Pages / Netlify**, hãy bấm vào biểu tượng **Chìa khóa (🔑)** ở góc trên khung chat để dán mã Gemini API Key miễn phí nhé!`,
+          actionsSummary: []
         });
-      });
-
-      // Gemini AI Coach Modal & Quick Adapt Listeners
-      const geminiModal = document.getElementById('gemini-modal');
-      const openGeminiBtn = document.getElementById('open-gemini-btn');
-      const quickAiAdaptBtn = document.getElementById('quick-ai-adapt-btn');
-      const closeGeminiBtn = document.getElementById('close-gemini-btn');
-      const closeGeminiBottom = document.getElementById('close-gemini-bottom');
-      const runGeminiBtn = document.getElementById('run-gemini-adapt-btn');
-      const copyPromptBtn = document.getElementById('copy-progress-prompt-btn');
-      const apiKeyInput = document.getElementById('user-gemini-api-key');
-      const saveKeyBtn = document.getElementById('save-api-key-btn');
-
-      if (apiKeyInput) {
-        apiKeyInput.value = localStorage.getItem('dz_gemini_api_key') || '';
+        saveChatHistoryToStorage();
+        renderGeminiChatMessages();
+      } finally {
+        if (sendBtn) sendBtn.disabled = false;
+        if (typingStatus) typingStatus.classList.add('hidden');
       }
+    }
 
-      if (saveKeyBtn && apiKeyInput) {
-        saveKeyBtn.addEventListener('click', () => {
-          localStorage.setItem('dz_gemini_api_key', apiKeyInput.value.trim());
-          showToast("Đã lưu Gemini API Key trên trình duyệt của bạn!", "success");
-        });
-      }
-
-      if (openGeminiBtn) {
-        openGeminiBtn.addEventListener('click', async () => {
-          await refreshGeminiContextPreview();
-          geminiModal.classList.remove('hidden');
-        });
-      }
-
-      if (quickAiAdaptBtn) {
-        quickAiAdaptBtn.addEventListener('click', async () => {
-          await refreshGeminiContextPreview();
-          geminiModal.classList.remove('hidden');
-          runGeminiScheduleAdaptation();
-        });
-      }
-
-      if (closeGeminiBtn) closeGeminiBtn.addEventListener('click', () => geminiModal.classList.add('hidden'));
-      if (closeGeminiBottom) closeGeminiBottom.addEventListener('click', () => geminiModal.classList.add('hidden'));
-      if (runGeminiBtn) runGeminiBtn.addEventListener('click', runGeminiScheduleAdaptation);
-
-      if (copyPromptBtn) {
-        copyPromptBtn.addEventListener('click', async () => {
-          const ctx = await buildUserProgressContext();
-          const promptText = `[BÁO CÁO TIẾN ĐỘ HỌC TẬP DEUTSCH ZUKUNFT - ${ctx.humanDate}]
-- Giai đoạn hiện tại: ${ctx.phaseContext}
-- Ghi chú bài học trên lớp sáng nay (8h-13h30): "${ctx.scratchpadNote}"
-- Các nhiệm vụ chưa hoàn thành từ buổi trước: ${ctx.unfinishedFromPreviousDay.length > 0 ? ctx.unfinishedFromPreviousDay.join('; ') : 'Không có'}
-- Cột mốc hồ sơ UNETI tiếp theo: ${ctx.upcomingMilestones.join(' | ')}
-
-Hãy đóng vai Huấn luyện viên cá nhân của tôi, điều chỉnh và chia nhỏ cụ thể những việc tôi cần làm trong 3 tiếng chiều nay (14:00 - 17:00) trước khi đi làm ca tối!`;
-
-          const tempInput = document.createElement('textarea');
-          tempInput.value = promptText;
-          document.body.appendChild(tempInput);
-          tempInput.select();
-          document.execCommand('copy');
-          document.body.removeChild(tempInput);
-          showToast("📋 Đã copy Báo cáo Tiến độ! Bạn có thể dán trực tiếp vào khung chat Gemini này.", "success");
-        });
-      }
-    });
-  </script>
-</body>
-</html>
+    // ==========================================
+    // 7. ROADMAP, MILESTONES, VOCAB & HISTORY MODALS
